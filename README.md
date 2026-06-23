@@ -1,6 +1,6 @@
 <div align="center">
 
-# 🚗 Djir
+#  Djir
 
 **A full-stack ride-hailing mobile app built with React Native, Expo & a serverless Postgres backend.**
 
