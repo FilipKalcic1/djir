@@ -149,13 +149,52 @@ Then scan the QR code with Expo Go, or press `i` / `a` to open a simulator.
 
 ## 📸 Screenshots
 
-_Add your own screenshots here once you've run the app:_
+> The complete Djir experience — designed in Figma, from first launch to live ride tracking.
 
-<!--
-| Onboarding | Home | Booking |
-| --- | --- | --- |
-| ![Onboarding](docs/onboarding.png) | ![Home](docs/home.png) | ![Booking](docs/booking.png) |
--->
+### 🚀 Onboarding & Authentication
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/screenshots/01-splash.png" width="200" alt="Splash screen" /><br /><sub><b>Splash</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/02-onboarding-1.png" width="200" alt="Onboarding — the perfect ride" /><br /><sub><b>Onboarding</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/03-onboarding-2.png" width="200" alt="Onboarding — best car in your hands" /><br /><sub><b>Onboarding</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/04-onboarding-3.png" width="200" alt="Onboarding — your ride, your way" /><br /><sub><b>Onboarding</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/05-get-started.png" width="200" alt="Get started" /><br /><sub><b>Get started</b></sub></td>
+    <td align="center"><img src="docs/screenshots/06-sign-up.png" width="200" alt="Create your account" /><br /><sub><b>Sign up</b></sub></td>
+    <td align="center"><img src="docs/screenshots/07-sign-in.png" width="200" alt="Sign in" /><br /><sub><b>Sign in</b></sub></td>
+    <td></td>
+  </tr>
+</table>
+
+### 🚕 Booking a Ride
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/screenshots/08-find-ride.png" width="200" alt="Nearby drivers on the map" /><br /><sub><b>Nearby drivers</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/09-find-ride-pickup.png" width="200" alt="Set pickup location" /><br /><sub><b>Set pickup</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/10-find-ride-location.png" width="200" alt="Current location" /><br /><sub><b>Current location</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/11-choose-rider.png" width="200" alt="Choose a rider" /><br /><sub><b>Choose a rider</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/12-ride-details.png" width="200" alt="Ride details" /><br /><sub><b>Ride details</b></sub></td>
+    <td align="center"><img src="docs/screenshots/13-booking-confirmed.png" width="200" alt="Booking confirmed" /><br /><sub><b>Booking confirmed</b></sub></td>
+    <td align="center"><img src="docs/screenshots/14-live-tracking.png" width="200" alt="Live ride tracking" /><br /><sub><b>Live tracking</b></sub></td>
+    <td></td>
+  </tr>
+</table>
+
+### 📋 Rides, Chat & Profile
+
+<table>
+  <tr>
+    <td align="center" width="25%"><img src="docs/screenshots/15-ride-history.png" width="200" alt="Ride history" /><br /><sub><b>Ride history</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/16-chat.png" width="200" alt="Chat" /><br /><sub><b>Chat</b></sub></td>
+    <td align="center" width="25%"><img src="docs/screenshots/17-profile.png" width="200" alt="Profile" /><br /><sub><b>Profile</b></sub></td>
+    <td></td>
+  </tr>
+</table>
 
 ## 🗺 Roadmap
 
