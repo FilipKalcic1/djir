@@ -71,7 +71,7 @@ URL and Stripe secret key are ever used — they are never exposed to the client
 
 ## 🧠 ML Platform — Smart Pricing
 
-Djir isn't just a UI clone — it's the front-end of a real **data + ML platform**.
+Djir isn't just a UI— it's the front-end of a real **data + ML platform**.
 Ride events flow into a **Databricks lakehouse** (medallion: Bronze → Silver →
 Gold), two **XGBoost** models learn the city's traffic and demand, and the app
 calls a serving endpoint for a live, condition-aware price.
