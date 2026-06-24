@@ -48,8 +48,9 @@ const Payment = ({
       merchantDisplayName: "Djir",
       intentConfiguration: {
         mode: {
-          amount: parseInt(amount) * 100,
-          currencyCode: "usd",
+          // Round euros→cents; parseFloat keeps the decimal fare (e.g. €7.73).
+          amount: Math.round(parseFloat(amount) * 100),
+          currencyCode: "eur",
         },
         confirmHandler: async (
           paymentMethod,
@@ -100,7 +101,7 @@ const Payment = ({
                   destination_latitude: destinationLatitude,
                   destination_longitude: destinationLongitude,
                   ride_time: rideTime.toFixed(0),
-                  fare_price: parseInt(amount) * 100,
+                  fare_price: Math.round(parseFloat(amount) * 100),
                   payment_status: "paid",
                   driver_id: driverId,
                   user_id: userId,

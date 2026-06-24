@@ -35,6 +35,7 @@ which means the mobile client and the backend live in a single codebase and depl
 - **Ride history** — completed rides are saved to and read back from Postgres, joined with driver details.
 - **Profile** — view account details managed through Clerk.
 - **Polished UX** — bottom sheets (`@gorhom/bottom-sheet`), reanimated transitions, and a custom design system styled with NativeWind (Tailwind) and the Plus Jakarta Sans typeface.
+- **🧠 Smart pricing (ML)** — ETAs and fares are predicted by XGBoost models (trip duration + dynamic surge) trained on a **Databricks lakehouse** and served to the app, with a deterministic fallback. See the [ML Platform](ml-platform/).
 
 ## 🛠 Tech Stack
 
@@ -50,6 +51,7 @@ which means the mobile client and the backend live in a single codebase and depl
 | Maps | `react-native-maps`, Google Places & Directions APIs |
 | Geocoding | Geoapify (reverse geocoding for driver positions) |
 | State | Zustand |
+| **Data & ML** | **Databricks · Delta Lake · MLflow · Unity Catalog · XGBoost · FastAPI** |
 
 ## 🧱 Architecture
 
@@ -67,22 +69,46 @@ Mobile client (Expo Router screens)
 API routes under [`app/(api)`](app/\(api\)) run server-side and are the only place the database
 URL and Stripe secret key are ever used — they are never exposed to the client bundle.
 
+## 🧠 ML Platform — Smart Pricing
+
+Djir isn't just a UI clone — it's the front-end of a real **data + ML platform**.
+Ride events flow into a **Databricks lakehouse** (medallion: Bronze → Silver →
+Gold), two **XGBoost** models learn the city's traffic and demand, and the app
+calls a serving endpoint for a live, condition-aware price.
+
+> **Same trip, different price:** Tresnjevka → Donji grad is **€5.86** on a quiet
+> weekday afternoon and **€9.74** on a rainy Saturday night — predicted from
+> 64,610 simulated Zagreb rides.
+
+| Model | Predicts | Test MAE | vs. naive baseline | R² |
+| --- | --- | --- | --- | --- |
+| **ETA** | trip duration | 3.18 min | **−58%** | 0.883 |
+| **Surge** | price multiplier | 0.065× | **−75%** | 0.938 |
+
+The whole pipeline (data simulator → training → MLflow → serving) runs locally in
+**one command** and the trained models are wired into the booking flow with a
+deterministic fallback, so the app never breaks if the endpoint is down.
+
+→ **[Explore the ML platform & runbook](ml-platform/)**  ·  **[Architecture & decision records](docs/architecture.md)**
+
 ## 📁 Project Structure
 
 ```
 djir/
 ├── app/
-│   ├── (api)/            # Server API routes (Stripe, users, rides, drivers)
+│   ├── (api)/            # Server API routes (Stripe, users, rides, drivers, predict-price)
 │   ├── (auth)/           # Welcome, sign-in, sign-up screens
 │   ├── (root)/           # Authenticated app: tabs + ride-booking flow
 │   ├── _layout.tsx       # Root layout, fonts, Clerk provider
 │   └── index.tsx         # Entry redirect
 ├── components/           # Reusable UI (Map, RideCard, CustomButton, …)
 ├── constants/            # Static data, icon & image maps
-├── lib/                  # Auth helpers, fetch hook, map/fare utilities
+├── lib/                  # Auth helpers, fetch hook, map utils, smart pricing (pricing.ts)
 ├── store/                # Zustand stores
 ├── types/                # Shared TypeScript declarations
 ├── assets/               # Fonts, icons & images
+├── ml-platform/          # 🧠 ML platform: simulator, Databricks notebooks, models, FastAPI serving
+├── docs/                 # Architecture, decision records & screenshots
 └── schema.sql            # Database schema + sample driver seed data
 ```
 
@@ -119,6 +145,7 @@ cp .env.example .env
 | `EXPO_PUBLIC_GEOAPIFY_API_KEY` | [Geoapify](https://www.geoapify.com/) → API Keys |
 | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` | [Stripe dashboard](https://dashboard.stripe.com/apikeys) (publishable) |
 | `STRIPE_SECRET_KEY` | Stripe dashboard (secret) |
+| `ML_ENDPOINT_URL` *(optional)* | URL of the [Djir smart-pricing endpoint](ml-platform/) — the app falls back to a built-in heuristic if unset |
 
 ### 3. Set up the database
 

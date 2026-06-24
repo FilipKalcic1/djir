@@ -5,11 +5,8 @@ import MapViewDirections from "react-native-maps-directions";
 
 import { icons } from "@/constants";
 import { useFetch } from "@/lib/fetch";
-import {
-  calculateDriverTimes,
-  calculateRegion,
-  generateMarkersFromData,
-} from "@/lib/map";
+import { calculateRegion, generateMarkersFromData } from "@/lib/map";
+import { calculateSmartFares } from "@/lib/pricing";
 import { useDriverStore, useLocationStore } from "@/store";
 import { Driver, MarkerData } from "@/types/type";
 
@@ -47,7 +44,7 @@ const Map = () => {
       destinationLatitude !== undefined &&
       destinationLongitude !== undefined
     ) {
-      calculateDriverTimes({
+      calculateSmartFares({
         markers,
         userLatitude,
         userLongitude,

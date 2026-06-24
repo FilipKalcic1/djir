@@ -1,0 +1,17 @@
+# Generated dataset — reproduce with: python scripts/run_local.py --fresh
+data/
+
+# Local MLflow tracking store + artifacts (the Databricks notebooks use UC/MLflow)
+mlflow.db
+mlruns/
+mlartifacts/
+
+# Python caches / envs
+__pycache__/
+*.pyc
+.ipynb_checkpoints/
+.venv/
+venv/
+
+# NOTE: models/*.joblib and models/metrics.json ARE committed on purpose so the
+# FastAPI serving layer and the mobile-app loop work immediately after cloning.
