@@ -52,6 +52,11 @@ ZONES: dict[str, dict] = {
 }
 ZONE_NAMES: list[str] = list(ZONES.keys())
 
+# The models only know Zagreb: serving refuses coordinates further than this
+# from the city centre (the app then falls back to its heuristic price).
+SERVICE_CENTER = (45.8150, 15.9819)  # Ban Jelačić Square
+SERVICE_RADIUS_KM = 30.0
+
 # ──────────────────────────────────────────────────────────────────────────
 # Weather
 # ──────────────────────────────────────────────────────────────────────────

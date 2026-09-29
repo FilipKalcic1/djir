@@ -1,0 +1,100 @@
+# Needs no secrets: tests run on PGlite with a fake Stripe, generated JWT keys
+# and a fixed test quote secret.
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# No job writes back to the repository.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  app:
+    name: app (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    # A test that hangs (a promise that never settles) must not burn the
+    # 6-hour default; a green run takes a few minutes.
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - name: Native modules match the Expo SDK (plan C6)
+        if: runner.os == 'Linux'
+        run: npx expo install --check
+      # typecheck + lint (layer rules) + both Jest projects with coverage thresholds
+      - run: npm run check
+      - name: Web export builds (.web.tsx stubs for maps and payments)
+        if: runner.os == 'Linux'
+        run: npm run web:css && npx expo export -p web
+        env:
+          # Publishable keys are public; placeholders let the static render run.
+          EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
+          EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+
+  ml:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ml-platform
+    env:
+      # The pricing clock must not depend on the machine's zone.
+      TZ: America/Los_Angeles
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          # requirements-dev.txt pulls in the serving pins with -r.
+          cache-dependency-path: |
+            ml-platform/requirements-dev.txt
+            ml-platform/serving/requirements.txt
+      - run: pip install -r requirements-dev.txt
+      - run: pytest
+
+  # The container the ML README documents (R67): it must install the pinned
+  # serving stack, run as its non-root user and price with the committed models.
+  serving:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: ml-platform
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -f serving/Dockerfile -t djir-pricing .
+      - run: docker run -d --name djir-pricing -p 8000:8000 djir-pricing
+      - name: /health reports the committed models loaded; the process is not root
+        run: |
+          for attempt in $(seq 60); do
+            curl -fsS localhost:8000/health > health.json && break
+            sleep 2
+          done
+          cat health.json
+          python3 -c "import json, sys; sys.exit(json.load(open('health.json'))['models_loaded'] is not True)"
+          test "$(docker exec djir-pricing id -u)" = 10001
+      - name: Docker's own HEALTHCHECK reports healthy
+        run: |
+          for attempt in $(seq 30); do
+            test "$(docker inspect --format '{{.State.Health.Status}}' djir-pricing)" = healthy && exit 0
+            sleep 5
+          done
+          exit 1
+      - if: failure()
+        run: docker logs djir-pricing

@@ -22,21 +22,17 @@ export default function Root({ children }: PropsWithChildren) {
         */}
         <ScrollViewStyleReset />
 
-        {/* Using raw CSS styles as an escape-hatch to ensure the background color never flickers in dark-mode. */}
-        <style dangerouslySetInnerHTML={{ __html: responsiveBackground }} />
-        {/* Add any additional <head> elements that you want globally available on web... */}
+        {/* NativeWind's classes on the web: built by `npm run web:css` (web.css). */}
+        <link rel="stylesheet" href="/tailwind.css" />
+        {/* The UI is light-only (R59): no dark background flicker either. */}
+        <style dangerouslySetInnerHTML={{ __html: background }} />
       </head>
       <body>{children}</body>
     </html>
   );
 }
 
-const responsiveBackground = `
+const background = `
 body {
   background-color: #fff;
-}
-@media (prefers-color-scheme: dark) {
-  body {
-    background-color: #000;
-  }
 }`;

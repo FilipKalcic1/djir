@@ -7,82 +7,64 @@ import { ReactNativeModal } from "react-native-modal";
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
 import OAuth from "@/components/OAuth";
+import VerificationModal from "@/components/VerificationModal";
 import { icons, images } from "@/constants";
-import { fetchAPI } from "@/lib/fetch";
+import { clerkErrorMessage, signUpParams } from "@/lib/utils";
+
+type Step = "form" | "verifying" | "done";
 
 const SignUp = () => {
   const { isLoaded, signUp, setActive } = useSignUp();
-  const [showSuccessModal, setShowSuccessModal] = useState(false);
-
-  const [form, setForm] = useState({
-    name: "",
-    email: "",
-    password: "",
-  });
-  const [verification, setVerification] = useState({
-    state: "default",
-    error: "",
-    code: "",
-  });
+  const [form, setForm] = useState({ name: "", email: "", password: "" });
+  const [step, setStep] = useState<Step>("form");
+  const [code, setCode] = useState("");
+  const [codeError, setCodeError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
+    setBusy(true);
     try {
-      await signUp.create({
-        emailAddress: form.email,
-        password: form.password,
-      });
+      await signUp.create(signUpParams(form));
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-      setVerification({
-        ...verification,
-        state: "pending",
-      });
-    } catch (err: any) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
-      console.log(JSON.stringify(err, null, 2));
-      Alert.alert("Error", err.errors[0].longMessage);
+      setCode("");
+      setCodeError(null);
+      setStep("verifying");
+    } catch (err) {
+      Alert.alert(
+        "Sign up",
+        clerkErrorMessage(err, "Sign up failed. Please try again."),
+      );
+    } finally {
+      setBusy(false);
     }
   };
+
   const onPressVerify = async () => {
     if (!isLoaded) return;
+    setBusy(true);
     try {
-      const completeSignUp = await signUp.attemptEmailAddressVerification({
-        code: verification.code,
+      const result = await signUp.attemptEmailAddressVerification({
+        code: code.trim(),
       });
-      if (completeSignUp.status === "complete") {
-        await fetchAPI("/(api)/user", {
-          method: "POST",
-          body: JSON.stringify({
-            name: form.name,
-            email: form.email,
-            clerkId: completeSignUp.createdUserId,
-          }),
-        });
-        await setActive({ session: completeSignUp.createdSessionId });
-        setVerification({
-          ...verification,
-          state: "success",
-        });
+      if (result.status === "complete") {
+        await setActive({ session: result.createdSessionId });
+        setStep("done");
       } else {
-        setVerification({
-          ...verification,
-          error: "Verification failed. Please try again.",
-          state: "failed",
-        });
+        setCodeError("Verification failed. Please try again.");
       }
-    } catch (err: any) {
-      // See https://clerk.com/docs/custom-flows/error-handling
-      // for more info on error handling
-      setVerification({
-        ...verification,
-        error: err.errors[0].longMessage,
-        state: "failed",
-      });
+    } catch (err) {
+      // Keep the modal open with the reason, so the rider can retry (R15).
+      setCodeError(
+        clerkErrorMessage(err, "That code didn't work. Please try again."),
+      );
+    } finally {
+      setBusy(false);
     }
   };
+
   return (
-    <ScrollView className="flex-1 bg-white">
+    <ScrollView className="flex-1 bg-white" keyboardShouldPersistTaps="handled">
       <View className="flex-1 bg-white">
         <View className="relative w-full h-[250px]">
           <Image source={images.signUpCar} className="z-0 w-full h-[250px]" />
@@ -103,6 +85,8 @@ const SignUp = () => {
             placeholder="Enter email"
             icon={icons.email}
             textContentType="emailAddress"
+            autoCapitalize="none"
+            keyboardType="email-address"
             value={form.email}
             onChangeText={(value) => setForm({ ...form, email: value })}
           />
@@ -110,7 +94,7 @@ const SignUp = () => {
             label="Password"
             placeholder="Enter password"
             icon={icons.lock}
-            secureTextEntry={true}
+            secureTextEntry
             textContentType="password"
             value={form.password}
             onChangeText={(value) => setForm({ ...form, password: value })}
@@ -118,6 +102,7 @@ const SignUp = () => {
           <CustomButton
             title="Sign Up"
             onPress={onSignUpPress}
+            loading={busy}
             className="mt-6"
           />
           <OAuth />
@@ -129,47 +114,18 @@ const SignUp = () => {
             <Text className="text-primary-500">Log In</Text>
           </Link>
         </View>
-        <ReactNativeModal
-          isVisible={verification.state === "pending"}
-          // onBackdropPress={() =>
-          //   setVerification({ ...verification, state: "default" })
-          // }
-          onModalHide={() => {
-            if (verification.state === "success") {
-              setShowSuccessModal(true);
-            }
-          }}
-        >
-          <View className="bg-white px-7 py-9 rounded-2xl min-h-[300px]">
-            <Text className="font-JakartaExtraBold text-2xl mb-2">
-              Verification
-            </Text>
-            <Text className="font-Jakarta mb-5">
-              We've sent a verification code to {form.email}.
-            </Text>
-            <InputField
-              label={"Code"}
-              icon={icons.lock}
-              placeholder={"12345"}
-              value={verification.code}
-              keyboardType="numeric"
-              onChangeText={(code) =>
-                setVerification({ ...verification, code })
-              }
-            />
-            {verification.error && (
-              <Text className="text-red-500 text-sm mt-1">
-                {verification.error}
-              </Text>
-            )}
-            <CustomButton
-              title="Verify Email"
-              onPress={onPressVerify}
-              className="mt-5 bg-success-500"
-            />
-          </View>
-        </ReactNativeModal>
-        <ReactNativeModal isVisible={showSuccessModal}>
+
+        <VerificationModal
+          visible={step === "verifying"}
+          email={form.email.trim()}
+          code={code}
+          error={codeError}
+          verifying={busy}
+          onChangeCode={setCode}
+          onVerify={onPressVerify}
+        />
+
+        <ReactNativeModal isVisible={step === "done"}>
           <View className="bg-white px-7 py-9 rounded-2xl min-h-[300px]">
             <Image
               source={images.check}
@@ -183,7 +139,7 @@ const SignUp = () => {
             </Text>
             <CustomButton
               title="Browse Home"
-              onPress={() => router.push(`/(root)/(tabs)/home`)}
+              onPress={() => router.replace("/(root)/(tabs)/home")}
               className="mt-5"
             />
           </View>
@@ -192,4 +148,5 @@ const SignUp = () => {
     </ScrollView>
   );
 };
+
 export default SignUp;

@@ -19,5 +19,12 @@ web-build/
 expo-env.d.ts
 # @end expo-cli.env
 
-# env
+# env — only .env.example is committed
 .env
+.env*.local
+
+# test output
+coverage/
+
+# built by `npm run web:css`
+public/tailwind.css

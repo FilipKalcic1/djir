@@ -1,36 +1,23 @@
-import { TouchableOpacity, Text } from "react-native";
+import { ActivityIndicator, Text, TouchableOpacity } from "react-native";
 
 import { ButtonProps } from "@/types/type";
 
-const getBgVariantStyle = (variant: ButtonProps["bgVariant"]) => {
-  switch (variant) {
-    case "secondary":
-      return "bg-gray-500";
-    case "danger":
-      return "bg-red-500";
-    case "success":
-      return "bg-green-500";
-    case "outline":
-      return "bg-transparent border-neutral-300 border-[0.5px]";
-    default:
-      return "bg-[#0286FF]";
-  }
-};
+const BG = {
+  primary: "bg-primary-500",
+  secondary: "bg-gray-500",
+  danger: "bg-red-500",
+  success: "bg-green-500",
+  outline: "bg-transparent border-neutral-300 border-[0.5px]",
+  light: "bg-general-500",
+} as const;
 
-const getTextVariantStyle = (variant: ButtonProps["textVariant"]) => {
-  switch (variant) {
-    case "primary":
-      return "text-black";
-    case "secondary":
-      return "text-gray-100";
-    case "danger":
-      return "text-red-100";
-    case "success":
-      return "text-green-100";
-    default:
-      return "text-white";
-  }
-};
+const TEXT = {
+  default: "text-white",
+  primary: "text-black",
+  secondary: "text-gray-100",
+  danger: "text-red-100",
+  success: "text-green-100",
+} as const;
 
 const CustomButton = ({
   onPress,
@@ -39,19 +26,32 @@ const CustomButton = ({
   textVariant = "default",
   IconLeft,
   IconRight,
-  className,
+  className = "",
+  loading = false,
+  disabled = false,
   ...props
 }: ButtonProps) => {
+  const inactive = disabled || loading;
   return (
     <TouchableOpacity
       onPress={onPress}
-      className={`w-full rounded-full p-3 flex flex-row justify-center items-center shadow-md shadow-neutral-400/70 ${getBgVariantStyle(bgVariant)} ${className}`}
+      disabled={inactive}
+      accessibilityRole="button"
+      accessibilityLabel={title}
+      accessibilityState={{ disabled: inactive, busy: loading }}
+      className={`w-full rounded-full p-3 flex flex-row justify-center items-center shadow-md shadow-neutral-400/70 ${BG[bgVariant]} ${inactive ? "opacity-50" : ""} ${className}`}
       {...props}
     >
       {IconLeft && <IconLeft />}
-      <Text className={`text-lg font-bold ${getTextVariantStyle(textVariant)}`}>
-        {title}
-      </Text>
+      {loading ? (
+        <ActivityIndicator
+          color={textVariant === "default" ? "white" : "black"}
+        />
+      ) : (
+        <Text className={`text-lg font-JakartaBold ${TEXT[textVariant]}`}>
+          {title}
+        </Text>
+      )}
       {IconRight && <IconRight />}
     </TouchableOpacity>
   );

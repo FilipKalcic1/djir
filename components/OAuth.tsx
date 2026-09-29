@@ -4,20 +4,19 @@ import { Alert, Image, Text, View } from "react-native";
 
 import CustomButton from "@/components/CustomButton";
 import { icons } from "@/constants";
-import { googleOAuth } from "@/lib/auth";
+import { googleOAuth } from "@/services/auth";
 
+/** "Log In with Google": lands on Home when it works, explains when it doesn't (R10). */
 const OAuth = () => {
   const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const handleGoogleSignIn = async () => {
     const result = await googleOAuth(startOAuthFlow);
-
-    if (result.code === "session_exists") {
-      Alert.alert("Success", "Session exists. Redirecting to home screen.");
+    if (result.status === "signed-in") {
       router.replace("/(root)/(tabs)/home");
+    } else if (result.status === "error") {
+      Alert.alert("Google sign-in failed", result.message);
     }
-
-    Alert.alert(result.success ? "Success" : "Error", result.message);
   };
 
   return (
@@ -29,6 +28,7 @@ const OAuth = () => {
       </View>
 
       <CustomButton
+        testID="oauth-google"
         title="Log In with Google"
         className="mt-5 w-full shadow-none"
         IconLeft={() => (

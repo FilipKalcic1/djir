@@ -5,8 +5,22 @@
 # MAGIC Trains the dynamic-pricing multiplier regressor from time × place × weather
 # MAGIC features (everything observable the moment a rider opens the app). Same
 # MAGIC structure as the ETA notebook: `djir_ml.train.train_surge`, MLflow logging,
-# MAGIC Unity Catalog registration, `@champion` alias. Baseline = predicting the
-# MAGIC global average surge for everyone.
+# MAGIC Unity Catalog registration, `@champion` alias. Baselines: the global
+# MAGIC average surge for everyone, and Djir's informed heuristic surge.
+
+# COMMAND ----------
+
+# MAGIC %md ### Install the pinned training stack
+# MAGIC `djir_ml.train` needs scikit-learn and XGBoost at the exact versions the
+# MAGIC committed artifacts were built with (see `requirements.txt`).
+
+# COMMAND ----------
+
+# MAGIC %pip install -q scikit-learn==1.9.0 xgboost==3.3.0
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -56,6 +70,10 @@ with mlflow.start_run(run_name="surge_xgboost") as run:
     mlflow.log_metrics({f"test_{k}": v for k, v in metrics["model"].items()})
     mlflow.log_metric("baseline_mean_mae", metrics["baseline_mean"]["mae"])
     mlflow.log_metric("mae_improvement_pct", metrics["mae_improvement_pct"])
+    mlflow.log_metric("informed_mae", metrics["baseline_informed_heuristic"]["mae"])
+    mlflow.log_metric("mae_improvement_vs_informed_pct", metrics["mae_improvement_vs_informed_pct"])
+    # The whole report (baselines, n_train), which notebook 07 exports with the model.
+    mlflow.log_dict(metrics, "metrics.json")
 
     sample = pdf[config.SURGE_FEATURES].head(3)
     # artifact_path (not name=) is accepted by both MLflow 2.x and 3.x.

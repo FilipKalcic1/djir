@@ -1,0 +1,7 @@
+# Normalise line endings: the repo is LF everywhere (Prettier enforces it).
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.ttf binary
+*.joblib binary

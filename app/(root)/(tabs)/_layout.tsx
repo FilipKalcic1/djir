@@ -3,6 +3,10 @@ import { Image, ImageSourcePropType, View } from "react-native";
 
 import { icons } from "@/constants";
 
+// A style object takes a colour string, not a class: read the token itself.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { colors } = require("../../../tailwind.config").theme.extend;
+
 const TabIcon = ({
   source,
   focused,
@@ -29,13 +33,13 @@ const TabIcon = ({
 export default function Layout() {
   return (
     <Tabs
-      initialRouteName="index"
+      initialRouteName="home"
       screenOptions={{
         tabBarActiveTintColor: "white",
         tabBarInactiveTintColor: "white",
         tabBarShowLabel: false,
         tabBarStyle: {
-          backgroundColor: "#333333",
+          backgroundColor: colors.secondary["900"],
           borderRadius: 50,
           paddingBottom: 0, // ios only
           overflow: "hidden",
@@ -55,6 +59,7 @@ export default function Layout() {
         options={{
           title: "Home",
           headerShown: false,
+          tabBarAccessibilityLabel: "Home",
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.home} focused={focused} />
           ),
@@ -65,6 +70,7 @@ export default function Layout() {
         options={{
           title: "Rides",
           headerShown: false,
+          tabBarAccessibilityLabel: "Rides",
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.list} focused={focused} />
           ),
@@ -75,6 +81,7 @@ export default function Layout() {
         options={{
           title: "Chat",
           headerShown: false,
+          tabBarAccessibilityLabel: "Chat",
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.chat} focused={focused} />
           ),
@@ -85,6 +92,7 @@ export default function Layout() {
         options={{
           title: "Profile",
           headerShown: false,
+          tabBarAccessibilityLabel: "Profile",
           tabBarIcon: ({ focused }) => (
             <TabIcon source={icons.profile} focused={focused} />
           ),

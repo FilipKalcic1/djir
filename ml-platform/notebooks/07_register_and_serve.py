@@ -4,15 +4,29 @@
 # MAGIC
 # MAGIC Two complementary serving paths (see ADR-004):
 # MAGIC
-# MAGIC 1. **Databricks Model Serving** — managed, autoscaling REST endpoints for
-# MAGIC    each registered model. Shown here.
-# MAGIC 2. **Portable export** — download the `@champion` pipelines to `joblib`
+# MAGIC 1. **Portable export** — download the `@champion` pipelines to `joblib`
 # MAGIC    artifacts the FastAPI container serves anywhere (and which compose the ETA
 # MAGIC    + surge predictions into a single price quote for the mobile app).
+# MAGIC 2. **Databricks Model Serving** — managed, autoscaling REST endpoints for
+# MAGIC    each registered model.
 # MAGIC
 # MAGIC > On free Databricks tiers, managed Model Serving may be unavailable — that
 # MAGIC > is exactly why the portable export + FastAPI path exists. The model
 # MAGIC > artifacts are identical either way.
+
+# COMMAND ----------
+
+# MAGIC %md ### Install the pinned training stack
+# MAGIC Loading the `@champion` pipelines needs scikit-learn and XGBoost at the exact versions the
+# MAGIC committed artifacts were built with (see `requirements.txt`).
+
+# COMMAND ----------
+
+# MAGIC %pip install -q scikit-learn==1.9.0 xgboost==3.3.0
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -60,15 +74,50 @@ print("Surge:", round(float(surge.predict(example[config.SURGE_FEATURES])[0]), 2
 
 # COMMAND ----------
 
-# MAGIC %md ### Path 1 — create managed Model Serving endpoints
+# MAGIC %md ### Path 1 — export `@champion` to portable joblib artifacts
+# MAGIC Writes `eta_model.joblib`, `surge_model.joblib` and the `metrics.json` that notebooks 05
+# MAGIC and 06 logged with them, so the FastAPI serving container (which composes the two into
+# MAGIC one quote) can serve the Databricks-trained models unchanged, and its `/metrics` describes
+# MAGIC them. It runs first because it works on every tier, including those without Model Serving.
+# MAGIC
+# MAGIC Like `scripts/run_local.py`, it writes to `data/models/` (serve it with
+# MAGIC `DJIR_MODELS_DIR=data/models`). Set the `promote` widget to `true` to replace the committed
+# MAGIC `models/` instead: a retrain does not reproduce them bit for bit, so promoting changes the
+# MAGIC headline numbers and the tests pinned to them (ML README, "Promoting a retrain").
 
 # COMMAND ----------
 
+import mlflow.artifacts
 from mlflow import MlflowClient
+
+from djir_ml import artifacts
+
+_registry = MlflowClient(registry_uri="databricks-uc")
+
+def champion_metrics(model: str) -> dict:
+    """The metrics.json that notebook 05 or 06 logged in the run that trained `model@champion`."""
+    run_id = _registry.get_model_version_by_alias(model, "champion").run_id
+    return mlflow.artifacts.load_dict(f"runs:/{run_id}/metrics.json")
+
+dbutils.widgets.dropdown("promote", "false", ["false", "true"])
+PROMOTE = dbutils.widgets.get("promote") == "true"
+
+out_dir = artifacts.artifacts_dir(ML_PLATFORM, PROMOTE)
+metrics = {"eta": champion_metrics(ETA_MODEL), "surge": champion_metrics(SURGE_MODEL)}
+artifacts.save_artifacts(eta, surge, metrics, out_dir)
+print("Exported the @champion models and their metrics.json to", out_dir)
+
+# COMMAND ----------
+
+# MAGIC %md ### Path 2 — create managed Model Serving endpoints
+# MAGIC Needs a workspace with Model Serving; on free tiers this cell fails and
+# MAGIC the exported artifacts above are the serving path.
+
+# COMMAND ----------
+
 from mlflow.deployments import get_deploy_client
 
 client = get_deploy_client("databricks")
-_registry = MlflowClient(registry_uri="databricks-uc")
 
 def ensure_endpoint(name: str, model: str):
     # Model Serving must pin a concrete entity_version (there is no alias field),
@@ -111,24 +160,6 @@ ensure_endpoint("djir-surge", SURGE_MODEL)
 # MAGIC         "pickup_zone": "Tresnjevka", "dropoff_zone": "Donji grad",
 # MAGIC         "weather_condition": "clear"}]}'
 # MAGIC ```
-
-# COMMAND ----------
-
-# MAGIC %md ### Path 2 — export `@champion` to portable joblib artifacts
-# MAGIC Writes `eta_model.joblib` + `surge_model.joblib` into the repo's `models/`
-# MAGIC folder so the FastAPI serving container (which composes them into one quote)
-# MAGIC can serve the Databricks-trained models unchanged.
-
-# COMMAND ----------
-
-import joblib
-import os
-
-models_dir = os.path.join(ML_PLATFORM, config.MODELS_DIR)
-os.makedirs(models_dir, exist_ok=True)
-joblib.dump(eta, os.path.join(models_dir, config.ETA_MODEL_FILE))
-joblib.dump(surge, os.path.join(models_dir, config.SURGE_MODEL_FILE))
-print("Exported champion models to", models_dir)
 
 # COMMAND ----------
 

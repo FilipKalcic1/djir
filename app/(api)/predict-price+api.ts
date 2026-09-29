@@ -1,73 +1,68 @@
-import { haversineKm, heuristicQuote } from "@/lib/pricing";
+import { distanceKm } from "@/lib/geo";
+import { MAX_TRIP_KM, toWeather } from "@/lib/pricing";
+import { HttpError, readJson, requireEnv, route } from "@/server/http";
+import { quoteTrip } from "@/server/quote";
+import { signQuote } from "@/server/quote-token";
+import {
+  optionalInstant,
+  requireBookableSlot,
+  requireLatLng,
+} from "@/server/validate";
 
 /**
- * POST /(api)/predict-price
+ * POST /(api)/predict-price — public.
  *
- * Server route that quotes a ride's ETA + dynamic-surge fare. It forwards the
- * request to the Djir ML serving endpoint (FastAPI / Databricks Model Serving —
- * see `ml-platform/`) when `ML_ENDPOINT_URL` is configured, and otherwise falls
- * back to the deterministic heuristic in `lib/pricing.ts`. Either way the mobile
- * client gets the same response shape, so the ride-booking flow never blocks on
- * the ML backend being up.
+ * Quotes a trip (ML model, or the heuristic when the model is unavailable) for
+ * now or for a scheduled pickup, and returns a signed `quote_token` that
+ * /ride/book charges exactly (ADR-013). `scheduled_at` must carry an offset
+ * and be a slot on the 15-minute grid.
  */
-export async function POST(request: Request) {
-  const body = await request.json();
-  const {
-    pickup_lat,
-    pickup_lng,
-    dropoff_lat,
-    dropoff_lng,
-    when,
-    weather = "clear",
-  } = body ?? {};
-
-  if (
-    [pickup_lat, pickup_lng, dropoff_lat, dropoff_lng].some(
-      (v) => typeof v !== "number",
-    )
-  ) {
-    return new Response(
-      JSON.stringify({ error: "pickup_lat, pickup_lng, dropoff_lat, dropoff_lng are required numbers" }),
-      { status: 400 },
-    );
+export const POST = route(async (request) => {
+  const body = await readJson(request);
+  const pickup = requireLatLng(body.pickup_lat, body.pickup_lng, "pickup");
+  const dropoff = requireLatLng(body.dropoff_lat, body.dropoff_lng, "dropoff");
+  if (distanceKm(pickup, dropoff) > MAX_TRIP_KM) {
+    throw new HttpError(422, `Trips are limited to ${MAX_TRIP_KM} km`);
   }
 
-  // ── Primary path: the trained ML models behind the serving endpoint ────────
-  const mlUrl = process.env.ML_ENDPOINT_URL;
-  if (mlUrl) {
-    try {
-      const res = await fetch(`${mlUrl.replace(/\/$/, "")}/predict-price`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pickup_lat,
-          pickup_lng,
-          dropoff_lat,
-          dropoff_lng,
-          when,
-          weather,
-        }),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        return Response.json(data);
-      }
-      console.warn("ML endpoint returned", res.status, "- using heuristic");
-    } catch (e) {
-      console.warn("ML endpoint unreachable - using heuristic:", e);
-    }
-  }
+  const nowMs = Date.now();
+  const scheduledAt = optionalInstant(body.scheduled_at, "scheduled_at");
+  if (scheduledAt !== null) requireBookableSlot(scheduledAt, nowMs, 400); // K2, K6
 
-  // ── Fallback path: deterministic heuristic (mirrors djir_ml/pricing.py) ─────
-  const distanceKm = haversineKm(pickup_lat, pickup_lng, dropoff_lat, dropoff_lng);
-  const quote = heuristicQuote(distanceKm, when ? new Date(when) : new Date(), weather);
+  const quote = await quoteTrip({
+    pickup,
+    dropoff,
+    whenMs: scheduledAt ?? nowMs,
+    weather: toWeather(body.weather),
+  });
+  const tripMinutes = Math.max(1, Math.ceil(quote.etaMinutes)); // ETAs round up
+  const quoteToken = await signQuote(
+    {
+      v: 1,
+      pickup: [pickup.latitude, pickup.longitude],
+      dropoff: [dropoff.latitude, dropoff.longitude],
+      scheduledAt,
+      fareCents: quote.fareCents,
+      tripMinutes,
+      source: quote.source,
+      iat: nowMs,
+    },
+    requireEnv(process.env.QUOTE_SIGNING_SECRET, "QUOTE_SIGNING_SECRET"),
+  );
 
-  return Response.json({
+  return {
     eta_minutes: quote.etaMinutes,
+    trip_minutes: tripMinutes,
     surge_multiplier: quote.surgeMultiplier,
     total_fare_eur: quote.totalFareEur,
-    trip_distance_km: Math.round(distanceKm * 100) / 100,
+    fare_cents: quote.fareCents,
+    trip_distance_km: quote.tripDistanceKm,
     currency: "EUR",
     source: quote.source,
-  });
-}
+    scheduled_at:
+      scheduledAt === null ? null : new Date(scheduledAt).toISOString(),
+    quote_token: quoteToken,
+    // Lets the app correct its clock before it offers pickup slots.
+    server_time: new Date(nowMs).toISOString(),
+  };
+});

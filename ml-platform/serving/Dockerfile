@@ -23,4 +23,15 @@ COPY models ./models
 ENV DJIR_MODELS_DIR=/app/models
 EXPOSE 8000
 
+# Run unprivileged; the image only needs to read its code and models.
+RUN useradd --system --uid 10001 djir
+USER djir
+
+# Liveness only: /health answers 200 whenever the API can quote, and that
+# includes the heuristic fallback when the models failed to load. Whether the
+# models are pricing is the `models_loaded` field (plus `load_error`), not the
+# status code. Slim images have no curl, hence the Python one-liner.
+HEALTHCHECK --interval=30s --timeout=3s --start-period=20s --retries=3 \
+  CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=2)"
+
 CMD ["uvicorn", "serving.app:app", "--host", "0.0.0.0", "--port", "8000"]

@@ -3,6 +3,7 @@ import { Image, ScrollView, Text, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 
 import InputField from "@/components/InputField";
+import { displayName } from "@/lib/utils";
 
 const Profile = () => {
   const { user } = useUser();
@@ -21,7 +22,8 @@ const Profile = () => {
               uri: user?.externalAccounts[0]?.imageUrl ?? user?.imageUrl,
             }}
             style={{ width: 110, height: 110, borderRadius: 110 / 2 }}
-            className=" rounded-full h-[110px] w-[110px] border-[3px] border-white shadow-sm shadow-neutral-300"
+            className="rounded-full h-[110px] w-[110px] border-[3px] border-white shadow-sm shadow-neutral-300"
+            accessibilityLabel="Profile photo"
           />
         </View>
 
@@ -29,7 +31,7 @@ const Profile = () => {
           <View className="flex flex-col items-start justify-start w-full">
             <InputField
               label="First name"
-              placeholder={user?.firstName || "Not Found"}
+              placeholder={user?.firstName || displayName(user)}
               containerStyle="w-full"
               inputStyle="p-3.5"
               editable={false}

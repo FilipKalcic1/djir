@@ -59,7 +59,7 @@ feat = (
 keep = (
     ["ride_id", "requested_at"]
     + sorted(set(config.ETA_FEATURES) | set(config.SURGE_FEATURES))
-    + [config.ETA_TARGET, config.SURGE_TARGET, "fare_amount_eur"]
+    + [config.ETA_TARGET, config.SURGE_TARGET, "fare_amount_eur", "payment_status"]
 )
 feat = feat.select(*keep)
 

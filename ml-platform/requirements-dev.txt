@@ -1,0 +1,5 @@
+# Tests (pytest) — everything the suite imports, without MLflow.
+-r serving/requirements.txt
+pyarrow>=15.0
+pytest>=8.0
+httpx>=0.27

@@ -10,8 +10,12 @@ Both are scikit-learn Pipelines (one-hot encode the categoricals -> XGBoost),
 which means the *saved* artifact already contains its own preprocessing: serving
 just hands it a DataFrame of raw features. We evaluate on a TIME-BASED hold-out
 (the most recent 20% of rides) — the honest setup for a forecasting problem —
-and always compare against the naive heuristic the app would otherwise use, so
-the model's added value is explicit and measurable.
+and compare against TWO baselines, so the model's added value is explicit:
+
+  * naive    — what a typical app shows (one flat speed / the global mean);
+  * informed — the deterministic heuristic Djir itself falls back to, which
+               already knows congestion and weather. Beating the naive baseline
+               is easy; the informed one is the honest bar.
 """
 
 from __future__ import annotations
@@ -39,9 +43,13 @@ from .config import (
 
 
 def prepare(df: pd.DataFrame) -> pd.DataFrame:
-    """Keep only completed rides with valid labels (drop the cancelled ones)."""
-    out = df[df["payment_status"] == "paid"].copy()
-    out = out.dropna(subset=[ETA_TARGET, SURGE_TARGET, "fare_amount_eur"])
+    """Keep only completed rides with valid labels (drop the cancelled ones).
+
+    The Silver layer has already dropped cancelled rides, so the Databricks
+    feature table may not carry `payment_status`; filter on it only if present.
+    """
+    out = df[df["payment_status"] == "paid"] if "payment_status" in df else df
+    out = out.dropna(subset=[ETA_TARGET, SURGE_TARGET, "fare_amount_eur"]).copy()
     return out.sort_values("requested_at").reset_index(drop=True)
 
 
@@ -84,33 +92,61 @@ def _regression_metrics(y_true, y_pred) -> dict:
     }
 
 
+def _improvement_pct(y_true, y_pred, y_base) -> float:
+    """MAE improvement over a baseline, from the UNrounded MAEs (no round-of-rounded)."""
+    model_mae = mean_absolute_error(y_true, y_pred)
+    base_mae = mean_absolute_error(y_true, y_base)
+    return round((base_mae - model_mae) / base_mae * 100, 1)
+
+
+def evaluate_eta(pipe, n_train: int, test_df: pd.DataFrame) -> dict:
+    """Score a fitted ETA pipeline on the hold-out against both baselines."""
+    y_true = test_df[ETA_TARGET].to_numpy()
+    y_pred = pipe.predict(test_df[ETA_FEATURES])
+    y_naive = test_df["trip_distance_km"].map(pricing.naive_duration_min).to_numpy()
+    y_informed = np.array([
+        pricing.estimate_duration_min(r.trip_distance_km, r.hour_of_day, r.day_of_week, r.weather_condition)
+        for r in test_df.itertuples()
+    ])
+    return {
+        "target": ETA_TARGET,
+        "n_train": int(n_train),
+        "n_test": int(len(test_df)),
+        "model": _regression_metrics(y_true, y_pred),
+        "baseline_naive_flat_speed": _regression_metrics(y_true, y_naive),
+        "baseline_informed_heuristic": _regression_metrics(y_true, y_informed),
+        "mae_improvement_pct": _improvement_pct(y_true, y_pred, y_naive),
+        "mae_improvement_vs_informed_pct": _improvement_pct(y_true, y_pred, y_informed),
+    }
+
+
+def evaluate_surge(pipe, train_df: pd.DataFrame, test_df: pd.DataFrame) -> dict:
+    """Score a fitted surge pipeline on the hold-out against both baselines."""
+    y_true = test_df[SURGE_TARGET].to_numpy()
+    y_pred = pipe.predict(test_df[SURGE_FEATURES])
+    y_mean = np.full_like(y_true, train_df[SURGE_TARGET].mean(), dtype=float)
+    y_informed = np.array([
+        pricing.heuristic_surge(r.hour_of_day, r.day_of_week, r.weather_condition)
+        for r in test_df.itertuples()
+    ])
+    return {
+        "target": SURGE_TARGET,
+        "n_train": int(len(train_df)),
+        "n_test": int(len(test_df)),
+        "model": _regression_metrics(y_true, y_pred),
+        "baseline_mean": _regression_metrics(y_true, y_mean),
+        "baseline_informed_heuristic": _regression_metrics(y_true, y_informed),
+        "mae_improvement_pct": _improvement_pct(y_true, y_pred, y_mean),
+        "mae_improvement_vs_informed_pct": _improvement_pct(y_true, y_pred, y_informed),
+    }
+
+
 def train_eta(df: pd.DataFrame):
     """Train the ETA model. Returns (pipeline, metrics)."""
     train_df, test_df = time_split(prepare(df))
     pipe = _make_pipeline(ETA_NUMERIC_FEATURES, ETA_CATEGORICAL_FEATURES)
     pipe.fit(train_df[ETA_FEATURES], train_df[ETA_TARGET])
-
-    y_true = test_df[ETA_TARGET].to_numpy()
-    y_pred = pipe.predict(test_df[ETA_FEATURES])
-
-    # Baseline = the NAIVE flat-speed ETA a typical app shows (blind to traffic
-    # and weather). The model's job is to beat it by learning congestion.
-    y_base = test_df["trip_distance_km"].map(pricing.naive_duration_min).to_numpy()
-
-    model_m = _regression_metrics(y_true, y_pred)
-    base_m = _regression_metrics(y_true, y_base)
-    # Improvement from the UNrounded MAEs to avoid a round-of-rounded artifact.
-    raw_model_mae = mean_absolute_error(y_true, y_pred)
-    raw_base_mae = mean_absolute_error(y_true, y_base)
-    metrics = {
-        "target": ETA_TARGET,
-        "n_train": int(len(train_df)),
-        "n_test": int(len(test_df)),
-        "model": model_m,
-        "baseline_naive_flat_speed": base_m,
-        "mae_improvement_pct": round((raw_base_mae - raw_model_mae) / raw_base_mae * 100, 1),
-    }
-    return pipe, metrics
+    return pipe, evaluate_eta(pipe, len(train_df), test_df)
 
 
 def train_surge(df: pd.DataFrame):
@@ -118,23 +154,4 @@ def train_surge(df: pd.DataFrame):
     train_df, test_df = time_split(prepare(df))
     pipe = _make_pipeline(SURGE_NUMERIC_FEATURES, SURGE_CATEGORICAL_FEATURES)
     pipe.fit(train_df[SURGE_FEATURES], train_df[SURGE_TARGET])
-
-    y_true = test_df[SURGE_TARGET].to_numpy()
-    y_pred = pipe.predict(test_df[SURGE_FEATURES])
-
-    # Baseline = predict the global average surge for everyone.
-    y_base = np.full_like(y_true, train_df[SURGE_TARGET].mean(), dtype=float)
-
-    model_m = _regression_metrics(y_true, y_pred)
-    base_m = _regression_metrics(y_true, y_base)
-    raw_model_mae = mean_absolute_error(y_true, y_pred)
-    raw_base_mae = mean_absolute_error(y_true, y_base)
-    metrics = {
-        "target": SURGE_TARGET,
-        "n_train": int(len(train_df)),
-        "n_test": int(len(test_df)),
-        "model": model_m,
-        "baseline_mean": base_m,
-        "mae_improvement_pct": round((raw_base_mae - raw_model_mae) / raw_base_mae * 100, 1),
-    }
-    return pipe, metrics
+    return pipe, evaluate_surge(pipe, train_df, test_df)
