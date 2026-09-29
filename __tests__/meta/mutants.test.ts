@@ -422,16 +422,16 @@ describe("npm run mutants, in a scratch repo with a stub Jest", () => {
       : [
           {
             route: "SIGTERM reaches the runner mid-trial",
+            // The stub holds the trial open until released, and is never
+            // released: the runner must stop it, not wait for it.
             mode: "gated",
-            // The signal is pending in the runner before its trial may end, so
-            // the order never depends on how fast the machine is.
             send: (child: ChildProcess) => {
               child.kill("SIGTERM");
-              fs.writeFileSync(inSandbox("release"), "");
             },
             code: 143,
-            firstRow: row(FIRST, "✅ killed: 2 test(s) failed"),
-            message: "SIGTERM: stopped; no mutant is left in the tree.",
+            firstRow: null,
+            message:
+              "SIGTERM: stopped, lib/x.ts restored; no mutant is left in the tree.",
           },
           {
             route: "its tests die of Ctrl+C (SIGINT reaches the whole group)",
@@ -456,6 +456,8 @@ describe("npm run mutants, in a scratch repo with a stub Jest", () => {
       expect(stdout).not.toContain("| RY |");
       expect(readSandbox(TARGET)).toBe(ORIGINAL);
       expect(readSandbox("lib/y.ts")).toBe(ORIGINAL);
+      // The trial's tests were stopped, not left running on mutated code.
+      expect(alive(stubRuns()[0].pid)).toBe(false);
     });
   }
 });

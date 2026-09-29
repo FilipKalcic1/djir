@@ -14,7 +14,7 @@
  *   npm run mutants            # all
  *   npm run mutants -- R04 R05 # some
  */
-import { spawnSync } from "node:child_process";
+import { spawn } from "node:child_process";
 import { createHash } from "node:crypto";
 import fs from "node:fs";
 import os from "node:os";
@@ -92,8 +92,12 @@ function restore() {
   return file;
 }
 
+/** The tests of the trial in progress, so a signal can stop them too. */
+let running = null;
+
 /** Stop the run at once, with every file as it was. */
 function interrupt(signal) {
+  running?.kill("SIGKILL");
   const file = restore();
   console.error(
     `\n${signal}: stopped${file ? `, ${file} restored` : ""}; no mutant is left in the tree.`,
@@ -129,28 +133,51 @@ export function verdict(mutant, { status, output }) {
   };
 }
 
+/**
+ * Run the mutant's tests. Asynchronously, so the event loop keeps running: a
+ * SIGINT or SIGTERM is handled the moment it arrives, not after the trial.
+ */
 function run(mutant) {
-  const options = {
-    encoding: "utf8",
-    timeout: TRIAL_TIMEOUT_MS,
-    killSignal: "SIGKILL",
-    maxBuffer: 64 * 1024 * 1024,
-  };
-  if (mutant.jest) {
-    return spawnSync(
-      process.execPath,
-      [...JEST, ...mutant.jest, "-t", `${mutant.id}\\b`],
-      { ...options, cwd: ROOT },
-    );
-  }
-  return spawnSync(PYTHON, ["-m", "pytest", "-q", "-k", mutant.pytest], {
-    ...options,
-    cwd: path.join(ROOT, "ml-platform"),
+  const [command, args, cwd] = mutant.jest
+    ? [
+        process.execPath,
+        [...JEST, ...mutant.jest, "-t", `${mutant.id}\\b`],
+        ROOT,
+      ]
+    : [
+        PYTHON,
+        ["-m", "pytest", "-q", "-k", mutant.pytest],
+        path.join(ROOT, "ml-platform"),
+      ];
+  return new Promise((resolve) => {
+    const child = spawn(command, args, {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    running = child;
+    let output = "";
+    let timedOut = false;
+    let settled = false;
+    const settle = (result) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      running = null;
+      resolve({ ...result, output, timedOut });
+    };
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, TRIAL_TIMEOUT_MS);
+    child.stdout.on("data", (chunk) => (output += chunk));
+    child.stderr.on("data", (chunk) => (output += chunk));
+    child.on("error", (error) => settle({ error }));
+    child.on("close", (status, signal) => settle({ status, signal }));
   });
 }
 
 /** Apply the mutant, run its tests, always restore. */
-function trial(mutant) {
+async function trial(mutant) {
   const file = path.join(ROOT, mutant.file);
   const original = readIfExists(file);
   let mutated;
@@ -168,8 +195,8 @@ function trial(mutant) {
   try {
     fs.mkdirSync(path.dirname(file), { recursive: true });
     fs.writeFileSync(file, mutated);
-    const result = run(mutant);
-    if (result.error?.code === "ETIMEDOUT")
+    const result = await run(mutant);
+    if (result.timedOut)
       return {
         status: "error",
         detail: `timed out after ${TRIAL_TIMEOUT_MS / 1000} s`,
@@ -178,10 +205,7 @@ function trial(mutant) {
     // Ctrl+C reaches the whole process group: the tests died of it, so stop.
     if (result.signal === "SIGINT" || result.signal === "SIGTERM")
       interrupt(result.signal);
-    return verdict(mutant, {
-      status: result.status,
-      output: `${result.stdout}\n${result.stderr}`,
-    });
+    return verdict(mutant, { status: result.status, output: result.output });
   } finally {
     restore();
   }
@@ -207,13 +231,11 @@ async function main() {
   let ok = true;
   console.log("| R | Reintroduced bug | Result |\n| --- | --- | --- |");
   for (const mutant of selected) {
-    const { status, detail } = trial(mutant);
+    const { status, detail } = await trial(mutant);
     ok &&= status === "killed";
     console.log(
       `| ${mutant.id} | ${mutant.bug} | ${status === "killed" ? "✅" : "❌"} ${status}: ${detail} |`,
     );
-    // A signal that arrived during the (synchronous) trial is handled here.
-    await new Promise((resolve) => setImmediate(resolve));
   }
   process.exit(ok ? 0 : 1);
 }
