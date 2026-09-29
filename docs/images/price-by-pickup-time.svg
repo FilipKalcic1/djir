@@ -1,0 +1,48 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 880 400" width="880" height="400" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif" role="img" aria-labelledby="title desc">
+<title id="title">Same trip, different price</title>
+<desc id="desc">Fare for Tresnjevka to Donji grad (2.7 km) by pickup time: Saturday, rain: €7.02 to €12.60; Saturday, clear: €5.61 to €7.77; Tuesday, clear: €5.65 to €7.70.</desc>
+<rect x="0.5" y="0.5" width="879" height="399" rx="12" fill="#FFFFFF" stroke="#E5E7EB"/>
+<text x="64" y="40" font-size="20" font-weight="700" fill="#111827">Same trip, different price</text>
+<text x="64" y="64" font-size="13" fill="#6B7280">Tresnjevka → Donji grad (2.7 km), quoted by the committed ETA + surge models for each 15-minute pickup time (Zagreb)</text>
+<rect x="64" y="80" width="14" height="4" rx="2" fill="#D97706"/>
+<text x="84" y="86" font-size="12" fill="#111827">Saturday · rain</text>
+<rect x="212.0" y="80" width="14" height="4" rx="2" fill="#0286FF"/>
+<text x="232.0" y="86" font-size="12" fill="#111827">Saturday · clear</text>
+<rect x="367.2" y="80" width="14" height="4" rx="2" fill="#64748B"/>
+<text x="387.2" y="86" font-size="12" fill="#111827">Tuesday · clear</text>
+<line x1="64" y1="344.0" x2="856" y2="344.0" stroke="#E5E7EB"/>
+<text x="54" y="348.0" font-size="11" fill="#6B7280" text-anchor="end">€5</text>
+<line x1="64" y1="315.0" x2="856" y2="315.0" stroke="#E5E7EB"/>
+<text x="54" y="319.0" font-size="11" fill="#6B7280" text-anchor="end">€6</text>
+<line x1="64" y1="286.0" x2="856" y2="286.0" stroke="#E5E7EB"/>
+<text x="54" y="290.0" font-size="11" fill="#6B7280" text-anchor="end">€7</text>
+<line x1="64" y1="257.0" x2="856" y2="257.0" stroke="#E5E7EB"/>
+<text x="54" y="261.0" font-size="11" fill="#6B7280" text-anchor="end">€8</text>
+<line x1="64" y1="228.0" x2="856" y2="228.0" stroke="#E5E7EB"/>
+<text x="54" y="232.0" font-size="11" fill="#6B7280" text-anchor="end">€9</text>
+<line x1="64" y1="199.0" x2="856" y2="199.0" stroke="#E5E7EB"/>
+<text x="54" y="203.0" font-size="11" fill="#6B7280" text-anchor="end">€10</text>
+<line x1="64" y1="170.0" x2="856" y2="170.0" stroke="#E5E7EB"/>
+<text x="54" y="174.0" font-size="11" fill="#6B7280" text-anchor="end">€11</text>
+<line x1="64" y1="141.0" x2="856" y2="141.0" stroke="#E5E7EB"/>
+<text x="54" y="145.0" font-size="11" fill="#6B7280" text-anchor="end">€12</text>
+<line x1="64" y1="112.0" x2="856" y2="112.0" stroke="#E5E7EB"/>
+<text x="54" y="116.0" font-size="11" fill="#6B7280" text-anchor="end">€13</text>
+<text x="64.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">00:00</text>
+<text x="163.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">03:00</text>
+<text x="262.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">06:00</text>
+<text x="361.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">09:00</text>
+<text x="460.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">12:00</text>
+<text x="559.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">15:00</text>
+<text x="658.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">18:00</text>
+<text x="757.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">21:00</text>
+<text x="856.0" y="364" font-size="11" fill="#6B7280" text-anchor="middle">24:00</text>
+<text x="460.0" y="386" font-size="11" fill="#6B7280" text-anchor="middle">pickup time</text>
+<path d="M64.0,284.3 V284.3 H72.2 V284.3 H80.5 V284.3 H88.8 V284.3 H97.0 V285.4 H105.2 V285.4 H113.5 V285.4 H121.8 V285.4 H130.0 V284.8 H138.2 V284.8 H146.5 V284.8 H154.8 V284.8 H163.0 V284.0 H171.2 V284.0 H179.5 V284.0 H187.8 V284.0 H196.0 V283.7 H204.2 V283.7 H212.5 V283.7 H220.8 V283.7 H229.0 V282.5 H237.2 V282.5 H245.5 V282.5 H253.8 V282.5 H262.0 V262.5 H270.2 V262.5 H278.5 V262.5 H286.8 V262.5 H295.0 V193.2 H303.2 V193.2 H311.5 V193.2 H319.8 V193.2 H328.0 V134.3 H336.2 V134.3 H344.5 V134.3 H352.8 V134.3 H361.0 V234.4 H369.2 V234.4 H377.5 V234.4 H385.8 V234.4 H394.0 V257.9 H402.2 V257.9 H410.5 V257.9 H418.8 V257.9 H427.0 V250.6 H435.2 V250.6 H443.5 V250.6 H451.8 V250.6 H460.0 V238.4 H468.2 V238.4 H476.5 V238.4 H484.8 V238.4 H493.0 V246.3 H501.2 V246.3 H509.5 V246.3 H517.8 V246.3 H526.0 V244.5 H534.2 V244.5 H542.5 V244.5 H550.8 V244.5 H559.0 V235.0 H567.2 V235.0 H575.5 V235.0 H583.8 V235.0 H592.0 V182.5 H600.2 V182.5 H608.5 V182.5 H616.8 V182.5 H625.0 V123.6 H633.2 V123.6 H641.5 V123.6 H649.8 V123.6 H658.0 V145.9 H666.2 V145.9 H674.5 V145.9 H682.8 V145.9 H691.0 V190.6 H699.2 V190.6 H707.5 V190.6 H715.8 V190.6 H724.0 V191.5 H732.2 V191.5 H740.5 V191.5 H748.8 V191.5 H757.0 V190.6 H765.2 V190.6 H773.5 V190.6 H781.8 V190.6 H790.0 V186.0 H798.2 V186.0 H806.5 V186.0 H814.8 V186.0 H823.0 V206.5 H831.2 V206.5 H839.5 V206.5 H847.8 V206.5 H856.0" fill="none" stroke="#D97706" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M64.0,326.3 V326.3 H72.2 V326.3 H80.5 V326.3 H88.8 V326.3 H97.0 V326.0 H105.2 V326.0 H113.5 V326.0 H121.8 V326.0 H130.0 V326.0 H138.2 V326.0 H146.5 V326.0 H154.8 V326.0 H163.0 V326.3 H171.2 V326.3 H179.5 V326.3 H187.8 V326.3 H196.0 V326.3 H204.2 V326.3 H212.5 V326.3 H220.8 V326.3 H229.0 V325.4 H237.2 V325.4 H245.5 V325.4 H253.8 V325.4 H262.0 V321.4 H270.2 V321.4 H278.5 V321.4 H286.8 V321.4 H295.0 V305.7 H303.2 V305.7 H311.5 V305.7 H319.8 V305.7 H328.0 V264.8 H336.2 V264.8 H344.5 V264.8 H352.8 V264.8 H361.0 V317.0 H369.2 V317.0 H377.5 V317.0 H385.8 V317.0 H394.0 V319.1 H402.2 V319.1 H410.5 V319.1 H418.8 V319.1 H427.0 V318.2 H435.2 V318.2 H443.5 V318.2 H451.8 V318.2 H460.0 V316.4 H468.2 V316.4 H476.5 V316.4 H484.8 V316.4 H493.0 V317.9 H501.2 V317.9 H509.5 V317.9 H517.8 V317.9 H526.0 V317.6 H534.2 V317.6 H542.5 V317.6 H550.8 V317.6 H559.0 V316.4 H567.2 V316.4 H575.5 V316.4 H583.8 V316.4 H592.0 V301.7 H600.2 V301.7 H608.5 V301.7 H616.8 V301.7 H625.0 V263.7 H633.2 V263.7 H641.5 V263.7 H649.8 V263.7 H658.0 V279.3 H666.2 V279.3 H674.5 V279.3 H682.8 V279.3 H691.0 V305.4 H699.2 V305.4 H707.5 V305.4 H715.8 V305.4 H724.0 V307.8 H732.2 V307.8 H740.5 V307.8 H748.8 V307.8 H757.0 V306.6 H765.2 V306.6 H773.5 V306.6 H781.8 V306.6 H790.0 V304.9 H798.2 V304.9 H806.5 V304.9 H814.8 V304.9 H823.0 V312.1 H831.2 V312.1 H839.5 V312.1 H847.8 V312.1 H856.0" fill="none" stroke="#0286FF" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<path d="M64.0,323.4 V323.4 H72.2 V323.4 H80.5 V323.4 H88.8 V323.4 H97.0 V323.7 H105.2 V323.7 H113.5 V323.7 H121.8 V323.7 H130.0 V323.7 H138.2 V323.7 H146.5 V323.7 H154.8 V323.7 H163.0 V325.1 H171.2 V325.1 H179.5 V325.1 H187.8 V325.1 H196.0 V325.1 H204.2 V325.1 H212.5 V325.1 H220.8 V325.1 H229.0 V324.3 H237.2 V324.3 H245.5 V324.3 H253.8 V324.3 H262.0 V322.2 H270.2 V322.2 H278.5 V322.2 H286.8 V322.2 H295.0 V298.5 H303.2 V298.5 H311.5 V298.5 H319.8 V298.5 H328.0 V265.7 H336.2 V265.7 H344.5 V265.7 H352.8 V265.7 H361.0 V302.8 H369.2 V302.8 H377.5 V302.8 H385.8 V302.8 H394.0 V317.3 H402.2 V317.3 H410.5 V317.3 H418.8 V317.3 H427.0 V317.6 H435.2 V317.6 H443.5 V317.6 H451.8 V317.6 H460.0 V317.6 H468.2 V317.6 H476.5 V317.6 H484.8 V317.6 H493.0 V319.1 H501.2 V319.1 H509.5 V319.1 H517.8 V319.1 H526.0 V319.1 H534.2 V319.1 H542.5 V319.1 H550.8 V319.1 H559.0 V319.1 H567.2 V319.1 H575.5 V319.1 H583.8 V319.1 H592.0 V307.8 H600.2 V307.8 H608.5 V307.8 H616.8 V307.8 H625.0 V293.8 H633.2 V293.8 H641.5 V293.8 H649.8 V293.8 H658.0 V302.2 H666.2 V302.2 H674.5 V302.2 H682.8 V302.2 H691.0 V304.9 H699.2 V304.9 H707.5 V304.9 H715.8 V304.9 H724.0 V315.3 H732.2 V315.3 H740.5 V315.3 H748.8 V315.3 H757.0 V316.2 H765.2 V316.2 H773.5 V316.2 H781.8 V316.2 H790.0 V316.4 H798.2 V316.4 H806.5 V316.4 H814.8 V316.4 H823.0 V315.0 H831.2 V315.0 H839.5 V315.0 H847.8 V315.0 H856.0" fill="none" stroke="#64748B" stroke-width="2.5" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="530.1" cy="319.1" r="5" fill="#FFFFFF" stroke="#64748B" stroke-width="2.5"/>
+<text x="530.1" y="345.1" font-size="13" font-weight="700" fill="#111827" text-anchor="middle">€5.86</text>
+<circle cx="843.6" cy="206.5" r="5" fill="#FFFFFF" stroke="#D97706" stroke-width="2.5"/>
+<text x="833.6" y="232.5" font-size="13" font-weight="700" fill="#111827" text-anchor="end">€9.74</text>
+</svg>

@@ -1,13 +1,8 @@
-import { neon } from "@neondatabase/serverless";
+import { sql } from "@/server/db";
+import { route } from "@/server/http";
 
-export async function GET(request: Request) {
-  try {
-    const sql = neon(`${process.env.DATABASE_URL}`);
-    const response = await sql`SELECT * FROM drivers`;
-
-    return Response.json({ data: response });
-  } catch (error) {
-    console.error("Error fetching drivers:", error);
-    return Response.json({ error: "Internal Server Error" }, { status: 500 });
-  }
-}
+/** GET /(api)/driver — public: the drivers shown on the map. */
+export const GET = route(async () => {
+  const drivers = await sql()`SELECT * FROM drivers ORDER BY id`;
+  return { data: drivers };
+});

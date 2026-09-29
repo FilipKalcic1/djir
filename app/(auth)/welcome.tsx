@@ -21,17 +21,17 @@ const Home = () => {
         }}
         className="w-full flex justify-end items-end p-5"
       >
-        <Text className="text-black text-md font-JakartaBold">Skip</Text>
+        <Text className="text-black text-base font-JakartaBold">Skip</Text>
       </TouchableOpacity>
 
       <Swiper
         ref={swiperRef}
         loop={false}
         dot={
-          <View className="w-[32px] h-[4px] mx-1 bg-[#E2E8F0] rounded-full" />
+          <View className="w-[32px] h-[4px] mx-1 bg-slate-200 rounded-full" />
         }
         activeDot={
-          <View className="w-[32px] h-[4px] mx-1 bg-[#0286FF] rounded-full" />
+          <View className="w-[32px] h-[4px] mx-1 bg-primary-500 rounded-full" />
         }
         onIndexChanged={(index) => setActiveIndex(index)}
       >
@@ -47,7 +47,7 @@ const Home = () => {
                 {item.title}
               </Text>
             </View>
-            <Text className="text-md font-JakartaSemiBold text-center text-[#858585] mx-10 mt-3">
+            <Text className="text-base font-JakartaSemiBold text-center text-general-200 mx-10 mt-3">
               {item.description}
             </Text>
           </View>

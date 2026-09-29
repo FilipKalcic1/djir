@@ -1,0 +1,8 @@
+/*
+ * The web build's styles. On the web, NativeWind v2 passes `className` through
+ * as CSS classes, so the page needs Tailwind's utilities (react-native-web
+ * brings its own reset, hence no base layer). `npm run web:css` builds this
+ * with tailwind.web.config.js (utilities !important) into public/tailwind.css, which app/+html.tsx links and `expo export` ships.
+ */
+@tailwind components;
+@tailwind utilities;

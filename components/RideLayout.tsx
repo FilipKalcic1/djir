@@ -10,23 +10,42 @@ import { GestureHandlerRootView } from "react-native-gesture-handler";
 import Map from "@/components/Map";
 import { icons } from "@/constants";
 
+interface RideLayoutProps {
+  title: string;
+  children: React.ReactNode;
+  snapPoints?: string[];
+  /** The map behind the sheet; the booking map by default. */
+  map?: React.ReactNode;
+  /**
+   * Wrap the sheet in a scroll view. Pass false when the content is itself a
+   * list (a FlatList must not sit inside a ScrollView) — R48.
+   */
+  scrollable?: boolean;
+  onBack?: () => void;
+}
+
+/** A full-screen map with a back button, a title and a bottom sheet (Figma 8–14). */
 const RideLayout = ({
   title,
-  snapPoints,
   children,
-}: {
-  title: string;
-  snapPoints?: string[];
-  children: React.ReactNode;
-}) => {
+  snapPoints = ["40%", "85%"],
+  map = <Map />,
+  scrollable = true,
+  onBack = () => router.back(),
+}: RideLayoutProps) => {
   const bottomSheetRef = useRef<BottomSheet>(null);
 
   return (
     <GestureHandlerRootView className="flex-1">
       <View className="flex-1 bg-white">
-        <View className="flex flex-col h-screen bg-blue-500">
+        <View className="flex flex-col h-screen bg-primary-500">
           <View className="flex flex-row absolute z-10 top-16 items-center justify-start px-5">
-            <TouchableOpacity onPress={() => router.back()}>
+            <TouchableOpacity
+              testID="ride-layout-back"
+              onPress={onBack}
+              accessibilityRole="button"
+              accessibilityLabel="Go back"
+            >
               <View className="w-10 h-10 bg-white rounded-full items-center justify-center">
                 <Image
                   source={icons.backArrow}
@@ -35,37 +54,36 @@ const RideLayout = ({
                 />
               </View>
             </TouchableOpacity>
-            <Text className="text-xl font-JakartaSemiBold ml-5">
-              {title || "Go Back"}
+            <Text
+              testID="ride-layout-title"
+              accessibilityRole="header"
+              className="text-xl font-JakartaSemiBold ml-5"
+            >
+              {title}
             </Text>
           </View>
 
-          <Map />
+          {map}
         </View>
 
-        <BottomSheet
-          ref={bottomSheetRef}
-          snapPoints={snapPoints || ["40%", "85%"]}
-          index={0}
-        >
-          {title === "Choose a Rider" ? (
-            <BottomSheetView
-              style={{
-                flex: 1,
-                padding: 20,
-              }}
-            >
-              {children}
-            </BottomSheetView>
-          ) : (
+        <BottomSheet ref={bottomSheetRef} snapPoints={snapPoints} index={0}>
+          {scrollable ? (
             <BottomSheetScrollView
-              style={{
-                flex: 1,
-                padding: 20,
-              }}
+              testID="ride-layout-sheet"
+              style={{ flex: 1, padding: 20 }}
+              // The first tap on a place suggestion must select it, not just
+              // dismiss the keyboard (R22).
+              keyboardShouldPersistTaps="handled"
             >
               {children}
             </BottomSheetScrollView>
+          ) : (
+            <BottomSheetView
+              testID="ride-layout-sheet"
+              style={{ flex: 1, padding: 20 }}
+            >
+              {children}
+            </BottomSheetView>
           )}
         </BottomSheet>
       </View>

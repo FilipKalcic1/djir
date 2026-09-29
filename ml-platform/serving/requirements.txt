@@ -1,7 +1,14 @@
-fastapi>=0.110
-uvicorn[standard]>=0.29
-pandas>=2.0
-scikit-learn>=1.4
-xgboost>=2.0
+# Pinned to the versions that produced models/*.joblib (read from the pickles):
+# scikit-learn does not guarantee pickles load across versions (R26).
+scikit-learn==1.9.0
+xgboost==3.3.0
+numpy>=2.0,<3
+pandas>=2.2
 joblib>=1.3
+# Capped above the versions the tests run on (fastapi 0.141, starlette 1.7): a new
+# FastAPI minor or Starlette major can change validation or the TestClient.
+fastapi>=0.110,<0.142
+starlette>=0.46,<2
+uvicorn[standard]>=0.29
 pydantic>=2.0
+tzdata>=2024.1  # zoneinfo data for Europe/Zagreb on slim images and Windows

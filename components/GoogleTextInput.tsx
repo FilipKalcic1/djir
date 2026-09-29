@@ -4,6 +4,10 @@ import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplet
 import { icons } from "@/constants";
 import { GoogleInputProps } from "@/types/type";
 
+// A style object takes a colour string, not a class: read the token itself.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { colors } = require("../tailwind.config").theme.extend;
+
 const googlePlacesApiKey = process.env.EXPO_PUBLIC_PLACES_API_KEY;
 
 const GoogleTextInput = ({
@@ -28,7 +32,7 @@ const GoogleTextInput = ({
             borderRadius: 20,
             marginHorizontal: 20,
             position: "relative",
-            shadowColor: "#d4d4d4",
+            shadowColor: colors.secondary["300"],
           },
           textInput: {
             backgroundColor: textInputBackgroundColor
@@ -48,7 +52,7 @@ const GoogleTextInput = ({
             top: 0,
             width: "100%",
             borderRadius: 10,
-            shadowColor: "#d4d4d4",
+            shadowColor: colors.secondary["300"],
             zIndex: 99,
           },
         }}

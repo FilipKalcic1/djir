@@ -1,132 +1,109 @@
-import React, { useEffect, useState } from "react";
-import { ActivityIndicator, Text, View } from "react-native";
+import { useEffect, useMemo, useRef } from "react";
 import MapView, { Marker, PROVIDER_DEFAULT } from "react-native-maps";
 import MapViewDirections from "react-native-maps-directions";
 
 import { icons } from "@/constants";
-import { useFetch } from "@/lib/fetch";
-import { calculateRegion, generateMarkersFromData } from "@/lib/map";
-import { calculateSmartFares } from "@/lib/pricing";
+import { LatLng } from "@/lib/geo";
+import { regionFor } from "@/lib/map";
 import { useDriverStore, useLocationStore } from "@/store";
-import { Driver, MarkerData } from "@/types/type";
 
-const directionsAPI = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY;
+// A prop takes a colour string, not a class: read the token itself.
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const { colors } = require("../tailwind.config").theme.extend;
 
+const directionsApiKey = process.env.EXPO_PUBLIC_DIRECTIONS_API_KEY;
+
+/**
+ * The booking map: the rider, the nearby drivers and the route. It only reads
+ * the stores — drivers are placed and quoted once, by useDriverQuotes — so
+ * every screen shows the same drivers in the same places (R12). It re-frames
+ * when the trip changes (R51). Without a location it frames Zagreb (R19).
+ */
 const Map = () => {
   const {
-    userLongitude,
     userLatitude,
+    userLongitude,
     destinationLatitude,
     destinationLongitude,
   } = useLocationStore();
-  const { selectedDriver, setDrivers } = useDriverStore();
+  const { drivers, selectedDriver } = useDriverStore();
+  const mapRef = useRef<MapView>(null);
 
-  const { data: drivers, loading, error } = useFetch<Driver[]>("/(api)/driver");
-  const [markers, setMarkers] = useState<MarkerData[]>([]);
+  const pickup: LatLng | null =
+    userLatitude !== null && userLongitude !== null
+      ? { latitude: userLatitude, longitude: userLongitude }
+      : null;
+  const destination: LatLng | null =
+    destinationLatitude !== null && destinationLongitude !== null
+      ? { latitude: destinationLatitude, longitude: destinationLongitude }
+      : null;
+
+  const region = useMemo(
+    () =>
+      regionFor(
+        destination && pickup
+          ? [pickup, destination]
+          : pickup
+            ? [pickup, ...drivers]
+            : [],
+      ),
+    // Re-frame for a new trip, not for every store update.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [
+      userLatitude,
+      userLongitude,
+      destinationLatitude,
+      destinationLongitude,
+      drivers.length,
+    ],
+  );
 
   useEffect(() => {
-    if (Array.isArray(drivers)) {
-      if (!userLatitude || !userLongitude) return;
-
-      const newMarkers = generateMarkersFromData({
-        data: drivers,
-        userLatitude,
-        userLongitude,
-      });
-
-      setMarkers(newMarkers);
-    }
-  }, [drivers, userLatitude, userLongitude]);
-
-  useEffect(() => {
-    if (
-      markers.length > 0 &&
-      destinationLatitude !== undefined &&
-      destinationLongitude !== undefined
-    ) {
-      calculateSmartFares({
-        markers,
-        userLatitude,
-        userLongitude,
-        destinationLatitude,
-        destinationLongitude,
-      }).then((drivers) => {
-        setDrivers(drivers as MarkerData[]);
-      });
-    }
-  }, [markers, destinationLatitude, destinationLongitude]);
-
-  const region = calculateRegion({
-    userLatitude,
-    userLongitude,
-    destinationLatitude,
-    destinationLongitude,
-  });
-
-  if (loading || (!userLatitude && !userLongitude))
-    return (
-      <View className="flex justify-between items-center w-full">
-        <ActivityIndicator size="small" color="#000" />
-      </View>
-    );
-
-  if (error)
-    return (
-      <View className="flex justify-between items-center w-full">
-        <Text>Error: {error}</Text>
-      </View>
-    );
+    mapRef.current?.animateToRegion(region, 500);
+  }, [region]);
 
   return (
     <MapView
+      ref={mapRef}
       provider={PROVIDER_DEFAULT}
       className="w-full h-full rounded-2xl"
       tintColor="black"
       mapType="mutedStandard"
       showsPointsOfInterest={false}
       initialRegion={region}
-      showsUserLocation={true}
+      showsUserLocation
       userInterfaceStyle="light"
     >
-      {markers.map((marker, index) => (
+      {drivers.map((driver) => (
         <Marker
-          key={marker.id}
+          key={driver.id}
           coordinate={{
-            latitude: marker.latitude,
-            longitude: marker.longitude,
+            latitude: driver.latitude,
+            longitude: driver.longitude,
           }}
-          title={marker.title}
+          title={driver.title}
           image={
-            selectedDriver === +marker.id ? icons.selectedMarker : icons.marker
+            selectedDriver === driver.id ? icons.selectedMarker : icons.marker
           }
         />
       ))}
 
-      {destinationLatitude && destinationLongitude && (
-        <>
-          <Marker
-            key="destination"
-            coordinate={{
-              latitude: destinationLatitude,
-              longitude: destinationLongitude,
-            }}
-            title="Destination"
-            image={icons.pin}
-          />
-          <MapViewDirections
-            origin={{
-              latitude: userLatitude!,
-              longitude: userLongitude!,
-            }}
-            destination={{
-              latitude: destinationLatitude,
-              longitude: destinationLongitude,
-            }}
-            apikey={directionsAPI!}
-            strokeColor="#0286FF"
-            strokeWidth={2}
-          />
-        </>
+      {destination && (
+        <Marker
+          key="destination"
+          coordinate={destination}
+          title="Destination"
+          image={icons.pin}
+        />
+      )}
+      {destination && pickup && directionsApiKey && (
+        <MapViewDirections
+          origin={pickup}
+          destination={destination}
+          apikey={directionsApiKey}
+          strokeColor={colors.primary["500"]}
+          strokeWidth={2}
+        />
       )}
     </MapView>
   );

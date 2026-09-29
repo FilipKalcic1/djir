@@ -8,8 +8,23 @@
 # MAGIC params, metrics and the model to MLflow and register it to Unity Catalog with
 # MAGIC a `@champion` alias that serving reads.
 # MAGIC
-# MAGIC Evaluation is a **time-based** hold-out (most recent 20%) and is always
-# MAGIC compared to the naive flat-speed ETA, so the model's value is explicit.
+# MAGIC Evaluation is a **time-based** hold-out (most recent 20%), compared with
+# MAGIC two baselines: the naive flat-speed ETA and the informed heuristic Djir
+# MAGIC falls back to. The informed one is the honest bar.
+
+# COMMAND ----------
+
+# MAGIC %md ### Install the pinned training stack
+# MAGIC `djir_ml.train` needs scikit-learn and XGBoost at the exact versions the
+# MAGIC committed artifacts were built with (see `requirements.txt`).
+
+# COMMAND ----------
+
+# MAGIC %pip install -q scikit-learn==1.9.0 xgboost==3.3.0
+
+# COMMAND ----------
+
+dbutils.library.restartPython()
 
 # COMMAND ----------
 
@@ -59,6 +74,10 @@ with mlflow.start_run(run_name="eta_xgboost") as run:
     mlflow.log_metrics({f"test_{k}": v for k, v in metrics["model"].items()})
     mlflow.log_metric("naive_mae", metrics["baseline_naive_flat_speed"]["mae"])
     mlflow.log_metric("mae_improvement_pct", metrics["mae_improvement_pct"])
+    mlflow.log_metric("informed_mae", metrics["baseline_informed_heuristic"]["mae"])
+    mlflow.log_metric("mae_improvement_vs_informed_pct", metrics["mae_improvement_vs_informed_pct"])
+    # The whole report (baselines, n_train), which notebook 07 exports with the model.
+    mlflow.log_dict(metrics, "metrics.json")
 
     sample = pdf[config.ETA_FEATURES].head(3)
     # artifact_path (not name=) is accepted by both MLflow 2.x and 3.x.
@@ -72,7 +91,8 @@ with mlflow.start_run(run_name="eta_xgboost") as run:
 
 print(f"ETA test MAE {metrics['model']['mae']:.2f} min  "
       f"(naive {metrics['baseline_naive_flat_speed']['mae']:.2f}, "
-      f"-{metrics['mae_improvement_pct']:.1f}%)  R²={metrics['model']['r2']:.3f}")
+      f"-{metrics['mae_improvement_pct']:.1f}%; informed "
+      f"{metrics['baseline_informed_heuristic']['mae']:.2f})  R²={metrics['model']['r2']:.3f}")
 
 # COMMAND ----------
 

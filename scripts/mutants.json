@@ -1,0 +1,89 @@
+[
+  {
+    "id": "R01",
+    "bug": "a request without a session is served",
+    "file": "server/auth.ts",
+    "find": "if (!match) throw new HttpError(401, \"Please sign in\");",
+    "replace": "if (!match) return \"user_1\";",
+    "jest": ["__tests__/api/booking.test.ts"]
+  },
+  {
+    "id": "R02",
+    "bug": "a Stripe customer is attached to every payment",
+    "file": "app/(api)/ride/book+api.ts",
+    "find": "payment_method_types: [\"card\"],",
+    "replace": "payment_method_types: [\"card\"], customer: \"cus_every_payment\",",
+    "jest": ["__tests__/api/booking.test.ts"]
+  },
+  {
+    "id": "R03",
+    "bug": "the unauthenticated /(stripe)/pay route exists again",
+    "file": "app/(api)/(stripe)/pay+api.ts",
+    "create": "export const POST = () => Response.json({ ok: true });\n",
+    "jest": ["__tests__/api/route-inventory.test.ts"]
+  },
+  {
+    "id": "R04",
+    "bug": "the amount charged comes from the request body",
+    "file": "app/(api)/ride/book+api.ts",
+    "find": "amount: quote.fareCents,",
+    "replace": "amount: body.amount ? Math.round(Number(body.amount) * 100) : quote.fareCents,",
+    "jest": ["__tests__/api/booking.test.ts"]
+  },
+  {
+    "id": "R05",
+    "bug": "a ride is marked paid whatever the payment status",
+    "file": "server/rides.ts",
+    "find": "if (intentStatus === \"succeeded\") return \"paid\";",
+    "replace": "if (intentStatus !== \"canceled\") return \"paid\";",
+    "jest": ["__tests__/api/booking.test.ts"]
+  },
+  {
+    "id": "R06",
+    "bug": "the price uses the UTC hour instead of Zagreb's",
+    "file": "lib/pricing.ts",
+    "find": "const { hour, dayOfWeek } = zagrebClock(when);",
+    "replace": "const hour = new Date(when).getUTCHours(); const dayOfWeek = (new Date(when).getUTCDay() + 6) % 7;",
+    "jest": ["__tests__/lib/pricing.test.ts", "__tests__/api/predict-price.test.ts"]
+  },
+  {
+    "id": "R07",
+    "bug": "fetchAPI swallows HTTP errors",
+    "file": "services/api.ts",
+    "find": "if (!response.ok) {",
+    "replace": "if (!response.ok && false) {",
+    "jest": ["__tests__/services/api.test.ts"]
+  },
+  {
+    "id": "R08",
+    "bug": "the rider's id is taken from the request body",
+    "file": "app/(api)/ride/book+api.ts",
+    "find": "const userId = await requireUserId(request);",
+    "replace": "const userId = (await request.clone().json()).user_id ?? (await requireUserId(request));",
+    "jest": ["__tests__/api/booking.test.ts"]
+  },
+  {
+    "id": "R09",
+    "bug": "payment errors reach the sheet without localizedMessage",
+    "file": "services/booking.ts",
+    "find": "return { code: \"Failed\" as const, message, localizedMessage: message };",
+    "replace": "return { code: \"Failed\" as const, message, localizedMessage: undefined };",
+    "jest": ["__tests__/services", "__tests__/components/Payment.test.tsx"]
+  },
+  {
+    "id": "R10",
+    "bug": "Google sign-in does not land on Home",
+    "file": "components/OAuth.tsx",
+    "find": "router.replace(\"/(root)/(tabs)/home\");",
+    "replace": "router.replace(\"/(auth)/sign-up\");",
+    "jest": ["__tests__/components/OAuth.test.tsx", "__tests__/services/auth.test.ts"]
+  },
+  {
+    "id": "R11",
+    "bug": "notebook 04 drops payment_status from the feature table",
+    "file": "ml-platform/notebooks/04_feature_engineering.py",
+    "find": "\"fare_amount_eur\", \"payment_status\"]",
+    "replace": "\"fare_amount_eur\"]",
+    "pytest": "r11"
+  }
+]

@@ -1,6 +1,11 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
-  content: ["./app/**/*.{js,jsx,ts,tsx}", "./components/**/*.{js,jsx,ts,tsx}"],
+  content: [
+    "./app/**/*.{js,jsx,ts,tsx}",
+    "./components/**/*.{js,jsx,ts,tsx}",
+    // The README renders (npm run docs:shots) style their own frames.
+    "./docs/gallery/**/*.{ts,tsx}",
+  ],
   theme: {
     extend: {
       fontFamily: {

@@ -30,7 +30,7 @@ SELECT
   SUM(rides)                            AS total_rides,
   ROUND(SUM(revenue_eur), 0)            AS total_revenue_eur,
   ROUND(SUM(revenue_eur) / SUM(rides), 2) AS avg_fare_eur,
-  ROUND(AVG(avg_surge), 3)             AS avg_surge
+  ROUND(SUM(avg_surge * rides) / SUM(rides), 3) AS avg_surge  -- per ride, not per day
 FROM gold_daily_kpis;
 
 -- COMMAND ----------

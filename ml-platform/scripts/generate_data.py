@@ -1,7 +1,7 @@
 """
 Generate the Djir ride-event dataset and write it to disk.
 
-Outputs (under ml-platform/data/):
+Outputs (under ml-platform/data/, whatever the working directory; --out moves them):
   * rides.parquet      — the full Silver/feature table (with labels)
   * rides.csv          — same, CSV for quick eyeballing / Databricks upload
   * rides_raw.parquet  — the Bronze-style raw events (no labels/derived demand)
@@ -15,9 +15,12 @@ from __future__ import annotations
 import argparse
 import os
 import sys
+from pathlib import Path
 
-# Make `djir_ml` importable when run from ml-platform/ or scripts/.
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# ml-platform/, however the script is started: `djir_ml` is imported from it,
+# and data/ (git-ignored there) is written under it.
+ML_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ML_ROOT))
 
 from djir_ml import simulate  # noqa: E402
 from djir_ml.config import (  # noqa: E402
@@ -27,14 +30,18 @@ from djir_ml.config import (  # noqa: E402
 )
 
 
-def main() -> None:
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     ap = argparse.ArgumentParser()
     ap.add_argument("--days", type=int, default=120)
     ap.add_argument("--target", type=int, default=65_000, help="approx number of rides")
     ap.add_argument("--start", type=str, default="2025-01-01")
     ap.add_argument("--seed", type=int, default=42)
-    ap.add_argument("--out", type=str, default=DATA_DIR)
-    args = ap.parse_args()
+    ap.add_argument("--out", type=str, default=str(ML_ROOT / DATA_DIR))
+    return ap.parse_args(argv)
+
+
+def main(argv: list[str] | None = None) -> None:
+    args = parse_args(argv)
 
     os.makedirs(args.out, exist_ok=True)
     print(f"Generating ~{args.target:,} rides over {args.days} days from {args.start} …")

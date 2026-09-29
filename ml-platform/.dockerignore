@@ -1,0 +1,14 @@
+# Keep the build context to what serving/Dockerfile copies (djir_ml, serving, models).
+.venv/
+venv/
+data/
+mlruns/
+mlartifacts/
+mlflow.db
+notebooks/
+tests/
+scripts/
+**/__pycache__/
+**/*.pyc
+.pytest_cache/
+*.csv

@@ -1,164 +1,316 @@
 import { useAuth } from "@clerk/clerk-expo";
-import { useStripe } from "@stripe/stripe-react-native";
+import { StripeProvider, useStripe } from "@stripe/stripe-react-native";
+import * as Linking from "expo-linking";
 import { router } from "expo-router";
-import React, { useState } from "react";
-import { Alert, Image, Text, View } from "react-native";
-import { ReactNativeModal } from "react-native-modal";
+import { useEffect, useRef, useState } from "react";
+import { Alert, Platform, Text, View } from "react-native";
 
 import CustomButton from "@/components/CustomButton";
-import { images } from "@/constants";
-import { fetchAPI } from "@/lib/fetch";
-import { useLocationStore } from "@/store";
-import { PaymentProps } from "@/types/type";
+import { LatLng } from "@/lib/geo";
+import { formatEur } from "@/lib/utils";
+import { apiErrorCode } from "@/services/api";
+import { bookRide, confirmRide } from "@/services/booking";
+import { makeConfirmHandler } from "@/services/payment";
+import { fetchQuote } from "@/services/quotes";
+import { SLOT_EXPIRED_NOTICE, useBookingStore, useDriverStore } from "@/store";
+import { Ride, TripQuote } from "@/types/type";
 
-const Payment = ({
-  fullName,
-  email,
-  amount,
+/**
+ * A quote older than this is refreshed before the sheet opens. The server
+ * accepts 10 minutes, so at least 5 are left for entering a card.
+ */
+export const QUOTE_REFRESH_AFTER_MS = 5 * 60_000;
+
+export interface PaymentProps {
+  driverId: number;
+  quote: TripQuote;
+  pickup: LatLng;
+  dropoff: LatLng;
+  originAddress: string;
+  destinationAddress: string;
+  onBooked: (ride: Ride) => void;
+  /** Paid, but the ride could not be confirmed yet (GET /rides will settle it). */
+  onPaidUnconfirmed: () => void;
+}
+
+/** How a presented sheet reports that it ended without success. */
+interface SheetEnd {
+  code: string;
+  message: string;
+  localizedMessage?: string;
+}
+
+/**
+ * "Confirm Ride": pay the signed quote with the Stripe Payment Sheet
+ * (states P1–P9 of the build plan; the handler rules live in
+ * services/payment.ts). The amount is exactly `quote.fareCents`, the integer
+ * /ride/book charges, and the sheet is initialised before every presentation.
+ */
+const PaymentButton = ({
   driverId,
-  rideTime,
+  quote,
+  pickup,
+  dropoff,
+  originAddress,
+  destinationAddress,
+  onBooked,
+  onPaidUnconfirmed,
 }: PaymentProps) => {
-  const { initPaymentSheet, presentPaymentSheet } = useStripe();
-  const {
-    userAddress,
-    userLongitude,
-    userLatitude,
-    destinationLatitude,
-    destinationAddress,
-    destinationLongitude,
-  } = useLocationStore();
+  const { initPaymentSheet, presentPaymentSheet, handleURLCallback } =
+    useStripe();
+  const { getToken } = useAuth();
+  const requestQuote = useDriverStore((s) => s.requestQuote);
+  const quoteStatus = useDriverStore((s) => s.quoteStatus);
+  const quoteError = useDriverStore((s) => s.quoteError);
+  const expireSlot = useBookingStore((s) => s.expireSlot);
+  const [busy, setBusy] = useState(false);
+  const [booked, setBooked] = useState(false);
+  /** P8: the outcome is unknown; `rideId` is the ride that may be paid, when known. */
+  const [unknown, setUnknown] = useState<{ rideId: number | null } | null>(
+    null,
+  );
+  const [priceNotice, setPriceNotice] = useState<string | null>(null);
+  const [requoteError, setRequoteError] = useState<string | null>(null);
+  const awaitingFresh = useRef<number | null>(null); // the fare shown before refreshing
+  const buttonLabel =
+    quote.scheduledAt === null ? "Confirm Ride" : "Schedule Ride";
 
-  const { userId } = useAuth();
-  const [success, setSuccess] = useState<boolean>(false);
+  // 3-D Secure may return to the app via djir://stripe-redirect.
+  useEffect(() => {
+    const subscription = Linking.addEventListener("url", ({ url }) => {
+      if (url.includes("stripe-redirect")) handleURLCallback(url);
+    });
+    return () => subscription.remove();
+  }, [handleURLCallback]);
 
-  const openPaymentSheet = async () => {
-    await initializePaymentSheet();
+  // P3: after a stale quote was refreshed, continue — or ask for a second tap
+  // if the price changed.
+  useEffect(() => {
+    const previous = awaitingFresh.current;
+    if (
+      previous === null ||
+      Date.now() - quote.issuedAtMs >= QUOTE_REFRESH_AFTER_MS
+    ) {
+      return;
+    }
+    awaitingFresh.current = null;
+    if (quote.fareCents !== previous) {
+      setPriceNotice(
+        `Price updated: ${formatEur(previous / 100)} → ${formatEur(quote.fareCents / 100)}`,
+      );
+      setBusy(false);
+    } else {
+      pay();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote]);
+
+  // P3c: the refresh failed. The fare shown stays; say why, and a tap retries.
+  useEffect(() => {
+    if (awaitingFresh.current === null || quoteStatus !== "error") return;
+    awaitingFresh.current = null;
+    setRequoteError(
+      quoteError
+        ? `Couldn't refresh the price. ${quoteError}`
+        : "Couldn't refresh the price.",
+    );
+    setBusy(false);
+  }, [quoteStatus, quoteError]);
+
+  // P8: when the server named the ride it may have charged, ask once whether
+  // it was paid; if so it is booked (P6). Otherwise Rides settles it later.
+  useEffect(() => {
+    const rideId = unknown?.rideId ?? null;
+    if (rideId === null) return;
+    let active = true;
+    confirmRide(rideId, getToken)
+      .then((ride) => {
+        if (active) onBooked(ride);
+      })
+      .catch(() => {});
+    return () => {
+      active = false;
+    };
+    // Runs once per unknown outcome; getToken and onBooked are stable.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [unknown]);
+
+  /** P6: the sheet succeeded — confirm the ride (3 idempotent attempts). */
+  const finish = async (rideId: number) => {
+    setBooked(true);
+    try {
+      onBooked(await confirmRide(rideId, getToken));
+    } catch {
+      onPaidUnconfirmed(); // P7
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  /**
+   * P9: a ride was booked, but the sheet did not succeed (closed during
+   * 3-D Secure, a network drop while the SDK finished). Ask the server once
+   * whether it was paid before offering the button again.
+   */
+  const settle = async (rideId: number, end: SheetEnd) => {
+    try {
+      const ride = await confirmRide(rideId, getToken, { attempts: 1 });
+      setBooked(true);
+      onBooked(ride); // P6
+    } catch (error) {
+      if (apiErrorCode(error) !== "payment_incomplete") {
+        setUnknown({ rideId }); // P8: never offer a second payment
+      } else if (end.code !== "Canceled") {
+        Alert.alert("Payment failed", end.localizedMessage ?? end.message); // P4
+      } // P5: closed, nothing charged, nothing to say
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const pay = async () => {
+    setBusy(true);
+    setPriceNotice(null);
+    setRequoteError(null);
+    const attempt = {
+      rideId: null as number | null,
+      outcomeUnknown: false,
+      slotExpired: false,
+    };
+
+    const { error: initError } = await initPaymentSheet({
+      merchantDisplayName: "Djir",
+      returnURL: "djir://stripe-redirect",
+      intentConfiguration: {
+        mode: { amount: quote.fareCents, currencyCode: "eur" },
+        paymentMethodTypes: ["card"],
+        confirmHandler: makeConfirmHandler({
+          platform: Platform.OS,
+          quote,
+          buttonLabel,
+          book: (quoteToken, paymentMethodId) =>
+            bookRide(
+              {
+                quoteToken,
+                driverId,
+                paymentMethodId,
+                originAddress,
+                destinationAddress,
+              },
+              getToken,
+            ),
+          requote: () => fetchQuote(pickup, dropoff, quote.scheduledAt),
+          onBooked: (id) => {
+            attempt.rideId = id;
+          },
+          onOutcomeUnknown: (id) => {
+            attempt.outcomeUnknown = true;
+            setUnknown({ rideId: id });
+          },
+          onPriceChanged: requestQuote,
+          onSlotExpired: () => {
+            attempt.slotExpired = true;
+          },
+        }),
+      },
+    });
+    if (initError) {
+      // R75: say why, instead of the sheet's generic "not initialised".
+      Alert.alert(
+        "Payment unavailable",
+        initError.localizedMessage ?? initError.message,
+      );
+      setBusy(false);
+      return;
+    }
 
     const { error } = await presentPaymentSheet();
-
-    if (error) {
-      Alert.alert(`Error code: ${error.code}`, error.message);
-    } else {
-      setSuccess(true);
+    if (attempt.slotExpired) {
+      // K6: once the sheet is closed, back to the picker (Book Ride follows the notice).
+      setBusy(false);
+      expireSlot(SLOT_EXPIRED_NOTICE);
+      return;
     }
+    if (attempt.rideId !== null) {
+      await (error ? settle(attempt.rideId, error) : finish(attempt.rideId));
+      return;
+    }
+    // Nothing was booked. Canceled (P5) says nothing; P8 has its own view.
+    if (error && error.code !== "Canceled" && !attempt.outcomeUnknown) {
+      Alert.alert("Payment failed", error.localizedMessage ?? error.message);
+    }
+    setBusy(false);
   };
 
-  const initializePaymentSheet = async () => {
-    const { error } = await initPaymentSheet({
-      merchantDisplayName: "Djir",
-      intentConfiguration: {
-        mode: {
-          // Round euros→cents; parseFloat keeps the decimal fare (e.g. €7.73).
-          amount: Math.round(parseFloat(amount) * 100),
-          currencyCode: "eur",
-        },
-        confirmHandler: async (
-          paymentMethod,
-          shouldSavePaymentMethod,
-          intentCreationCallback,
-        ) => {
-          const { paymentIntent, customer } = await fetchAPI(
-            "/(api)/(stripe)/create",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                name: fullName || email.split("@")[0],
-                email: email,
-                amount: amount,
-                paymentMethodId: paymentMethod.id,
-              }),
-            },
-          );
-
-          if (paymentIntent.client_secret) {
-            const { result } = await fetchAPI("/(api)/(stripe)/pay", {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                payment_method_id: paymentMethod.id,
-                payment_intent_id: paymentIntent.id,
-                customer_id: customer,
-                client_secret: paymentIntent.client_secret,
-              }),
-            });
-
-            if (result.client_secret) {
-              await fetchAPI("/(api)/ride/create", {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  origin_address: userAddress,
-                  destination_address: destinationAddress,
-                  origin_latitude: userLatitude,
-                  origin_longitude: userLongitude,
-                  destination_latitude: destinationLatitude,
-                  destination_longitude: destinationLongitude,
-                  ride_time: rideTime.toFixed(0),
-                  fare_price: Math.round(parseFloat(amount) * 100),
-                  payment_status: "paid",
-                  driver_id: driverId,
-                  user_id: userId,
-                }),
-              });
-
-              intentCreationCallback({
-                clientSecret: result.client_secret,
-              });
-            }
-          }
-        },
-      },
-      returnURL: "djir://book-ride",
-    });
-
-    if (!error) {
-      // setLoading(true);
+  const onPress = () => {
+    setRequoteError(null);
+    if (Date.now() - quote.issuedAtMs >= QUOTE_REFRESH_AFTER_MS) {
+      awaitingFresh.current = quote.fareCents; // P3
+      setBusy(true);
+      requestQuote();
+      return;
     }
+    pay();
   };
+
+  if (unknown) {
+    // P8: never offer a second payment while the first one's outcome is unknown.
+    return (
+      <View testID="payment-unknown" className="my-10">
+        <Text className="text-base font-JakartaSemiBold text-center">
+          We couldn't confirm whether your payment went through.
+        </Text>
+        <CustomButton
+          title="Check Rides"
+          className="mt-4"
+          onPress={() => {
+            router.dismissAll();
+            router.navigate("/(root)/(tabs)/rides");
+          }}
+        />
+      </View>
+    );
+  }
 
   return (
-    <>
+    <View>
+      {priceNotice && (
+        <Text
+          testID="payment-price-updated"
+          className="text-base font-JakartaSemiBold text-warning-600 text-center mt-4"
+        >
+          {priceNotice}
+        </Text>
+      )}
+      {requoteError && (
+        <Text
+          testID="payment-requote-error"
+          className="text-base font-JakartaSemiBold text-danger-700 text-center mt-4"
+        >
+          {requoteError}
+        </Text>
+      )}
       <CustomButton
-        title="Confirm Ride"
+        testID="payment-confirm"
+        title={buttonLabel}
         className="my-10"
-        onPress={openPaymentSheet}
+        loading={busy}
+        disabled={booked}
+        onPress={onPress}
       />
-
-      <ReactNativeModal
-        isVisible={success}
-        onBackdropPress={() => setSuccess(false)}
-      >
-        <View className="flex flex-col items-center justify-center bg-white p-7 rounded-2xl">
-          <Image source={images.check} className="w-28 h-28 mt-5" />
-
-          <Text className="text-2xl text-center font-JakartaBold mt-5">
-            Booking placed successfully
-          </Text>
-
-          <Text className="text-md text-general-200 font-JakartaRegular text-center mt-3">
-            Thank you for your booking. Your reservation has been successfully
-            placed. Please proceed with your trip.
-          </Text>
-
-          <CustomButton
-            title="Back Home"
-            onPress={() => {
-              setSuccess(false);
-              router.push("/(root)/(tabs)/home");
-            }}
-            className="mt-5"
-          />
-        </View>
-      </ReactNativeModal>
-    </>
+    </View>
   );
 };
+
+/** The Payment Sheet needs its provider; keeping it here lets Payment.web.tsx stub it. */
+const Payment = (props: PaymentProps) => (
+  <StripeProvider
+    publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
+    merchantIdentifier="merchant.com.djir"
+    urlScheme="djir"
+  >
+    <PaymentButton {...props} />
+  </StripeProvider>
+);
 
 export default Payment;

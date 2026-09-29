@@ -5,43 +5,47 @@ Steps:
   1. Load (or generate) the ride dataset.
   2. Train the ETA and surge models (time-based hold-out + baseline comparison).
   3. Track everything in MLflow (local ./mlruns store) and log the models.
-  4. Save portable joblib artifacts + metrics.json for the FastAPI serving layer.
+  4. Save portable joblib artifacts + metrics.json: to data/models/, or to
+     models/ (what serving, the tests and the READMEs use) with --promote.
   5. Print example quotes (rush hour vs. quiet night) so you can SEE surge move.
 
 The Databricks notebooks mirror these exact steps at scale on the lakehouse.
 
+A retrain does not reproduce the committed models bit for bit, so promoting one
+changes the headline numbers (the €9.74 quote, the metrics tables, the chart)
+and the tests pinned to them. Compare data/models/metrics.json first.
+
 Usage:
-    python scripts/run_local.py            # generates data if missing
-    python scripts/run_local.py --fresh    # always regenerate
+    python scripts/run_local.py                      # generates data if missing
+    python scripts/run_local.py --fresh              # always regenerate
+    python scripts/run_local.py --fresh --promote    # also replace models/
 """
 
 from __future__ import annotations
 
 import argparse
 import datetime as dt
-import json
 import os
 import sys
+from pathlib import Path
 
-import joblib
-import mlflow
-import mlflow.sklearn
 import pandas as pd
 
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+# Everything (data/, models/, mlflow.db, mlruns/) lives under ml-platform/, whatever
+# the working directory: serving reads models/ from there, so a run started
+# elsewhere must not leave it serving stale artifacts.
+ML_ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ML_ROOT))
 
 # Windows consoles default to cp1252; force UTF-8 so €, ×, ² print cleanly.
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8")
 
-from djir_ml import features, predict, simulate, train  # noqa: E402
+from djir_ml import artifacts, features, predict, simulate, train  # noqa: E402
 from djir_ml.config import (  # noqa: E402
     DATA_DIR,
-    ETA_MODEL_FILE,
-    METRICS_FILE,
     MODELS_DIR,
     RIDES_TABLE_FILE,
-    SURGE_MODEL_FILE,
 )
 
 
@@ -82,10 +86,35 @@ def sample_quotes(eta_pipe, surge_pipe) -> list[dict]:
     return out
 
 
-def main() -> None:
-    ap = argparse.ArgumentParser()
+def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
+    ap = argparse.ArgumentParser(description="Generate, train, track and quote, locally.")
     ap.add_argument("--fresh", action="store_true", help="regenerate the dataset")
-    args = ap.parse_args()
+    ap.add_argument(
+        "--promote",
+        action="store_true",
+        help="write the models and metrics.json to models/ (what serving, the tests "
+        "and the READMEs use) instead of data/models/",
+    )
+    return ap.parse_args(argv)
+
+
+def artifacts_dir(promote: bool) -> Path:
+    """models/ is committed, so a retrain only replaces it when asked to."""
+    return artifacts.artifacts_dir(ML_ROOT, promote)
+
+
+# The writer notebook 07 uses too: the pipelines always travel with their metrics.json.
+save_artifacts = artifacts.save_artifacts
+
+
+def main(argv: list[str] | None = None) -> None:
+    # MLflow is imported here, not at the top, so the helpers above can be
+    # imported (and tested) without it: requirements-dev.txt leaves it out.
+    import mlflow
+    import mlflow.sklearn
+
+    args = parse_args(argv)
+    os.chdir(ML_ROOT)
 
     df = load_or_generate(args.fresh)
     print(f"Dataset: {len(df):,} rides\n")
@@ -93,8 +122,6 @@ def main() -> None:
     # MLflow 3 retired the bare file store; SQLite is the recommended local backend.
     mlflow.set_tracking_uri("sqlite:///mlflow.db")
     mlflow.set_experiment("djir-ml-local")
-
-    os.makedirs(MODELS_DIR, exist_ok=True)
 
     # ── ETA model ────────────────────────────────────────────────────────────
     with mlflow.start_run(run_name="eta_model"):
@@ -107,7 +134,9 @@ def main() -> None:
     print("ETA model")
     print(f"  test MAE  : {eta_metrics['model']['mae']:.2f} min "
           f"(naive baseline {eta_metrics['baseline_naive_flat_speed']['mae']:.2f} min, "
-          f"−{eta_metrics['mae_improvement_pct']:.1f}%)")
+          f"−{eta_metrics['mae_improvement_pct']:.1f}%; informed heuristic "
+          f"{eta_metrics['baseline_informed_heuristic']['mae']:.2f} min, "
+          f"{-eta_metrics['mae_improvement_vs_informed_pct']:+.1f}%)")
     print(f"  test R²   : {eta_metrics['model']['r2']:.3f}\n")
 
     # ── Surge model ──────────────────────────────────────────────────────────
@@ -124,12 +153,14 @@ def main() -> None:
     print(f"  test R²   : {surge_metrics['model']['r2']:.3f}\n")
 
     # ── Persist portable artifacts for serving ───────────────────────────────
-    joblib.dump(eta_pipe, os.path.join(MODELS_DIR, ETA_MODEL_FILE))
-    joblib.dump(surge_pipe, os.path.join(MODELS_DIR, SURGE_MODEL_FILE))
-    metrics = {"eta": eta_metrics, "surge": surge_metrics}
-    with open(os.path.join(MODELS_DIR, METRICS_FILE), "w") as f:
-        json.dump(metrics, f, indent=2)
-    print(f"Saved models + metrics to {MODELS_DIR}/\n")
+    out_dir = artifacts_dir(args.promote)
+    save_artifacts(eta_pipe, surge_pipe, {"eta": eta_metrics, "surge": surge_metrics}, out_dir)
+    print(f"Saved models + metrics to {out_dir}")
+    if not args.promote:
+        print(f"{MODELS_DIR}/ is unchanged: serving, the tests and the READMEs still use the "
+              "committed models. Serve these with DJIR_MODELS_DIR, or re-run with --promote "
+              "to replace them (the headline numbers and the pinned tests will change).")
+    print()
 
     # ── Sanity-check quotes ──────────────────────────────────────────────────
     print("Example quotes (Tresnjevka → Donji grad):")
