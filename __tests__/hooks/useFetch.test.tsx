@@ -210,7 +210,7 @@ describe("useFetch", () => {
     "R40: when the url changes mid-flight, the outdated response is dropped (it arrives %s the current one)",
     async (_, order) => {
       const { result, rerender } = renderHook(
-        ({ url }) => useFetch<string[], Body>(url),
+        ({ url }: { url: string }) => useFetch<string[], Body>(url),
         { initialProps: { url: "/(api)/rides?page=1" } },
       );
       await settle();
@@ -236,7 +236,7 @@ describe("useFetch", () => {
 
   it("R40: an outdated response arriving first neither shows its data nor ends the loading", async () => {
     const { result, rerender } = renderHook(
-      ({ url }) => useFetch<string[], Body>(url),
+      ({ url }: { url: string }) => useFetch<string[], Body>(url),
       { initialProps: { url: "/(api)/rides?page=1" } },
     );
     await settle();
@@ -255,7 +255,7 @@ describe("useFetch", () => {
 
   it("R40: an outdated request's failure is dropped too", async () => {
     const { result, rerender } = renderHook(
-      ({ url }) => useFetch<string[], Body>(url),
+      ({ url }: { url: string }) => useFetch<string[], Body>(url),
       { initialProps: { url: "/(api)/rides?page=1" } },
     );
     await settle();

@@ -32,10 +32,30 @@ const HEX_VALUES = [
   `VariableDeclarator > Literal.init[value=/${HEX_COLOUR}/]`,
 ].map((selector) => ({ selector, message: HEX_VALUE_MESSAGE }));
 
+/**
+ * eslint-config-expo 57 extends eslint-plugin-react-hooks 7, whose
+ * recommended set adds the React Compiler's diagnostics. These four flag
+ * code that is only unsafe once the compiler memoises it (refs read during
+ * render, Date.now() in render, a handler used before its declaration, a
+ * synchronous setState in an effect); app.json does not enable the compiler
+ * (experiments.reactCompiler), and meta/lint-rules fails if it ever does, so
+ * they are off. rules-of-hooks and exhaustive-deps keep their SDK 51 levels.
+ */
+const REACT_COMPILER_ONLY = [
+  "react-hooks/refs",
+  "react-hooks/purity",
+  "react-hooks/immutability",
+  "react-hooks/set-state-in-effect",
+];
+
 module.exports = {
   extends: ["expo", "prettier"],
   plugins: ["prettier", "import"],
+  // Generated and gitignored: `expo start` rewrites expo-env.d.ts; the rest
+  // are build and coverage output. `npm run lint` is `expo lint .`.
+  ignorePatterns: ["expo-env.d.ts", "coverage/", "dist/", "web-build/"],
   rules: {
+    ...Object.fromEntries(REACT_COMPILER_ONLY.map((rule) => [rule, "off"])),
     "prettier/prettier": "error",
     "import/order": [
       "error",
@@ -144,7 +164,7 @@ module.exports = {
             selector:
               "MemberExpression[object.name='AbortSignal'][property.name='timeout']",
             message:
-              "AbortSignal.timeout does not exist on Hermes (React Native 0.74).",
+              "AbortSignal.timeout does not exist on Hermes (React Native's AbortSignal polyfill has no timeout, still in 0.86).",
           },
         ],
       },
@@ -189,16 +209,22 @@ module.exports = {
     },
     {
       // Node tooling (npm run mutants, npm run docs:shots). ESLint 8's `eslint .`
-      // (what `expo lint` runs) only lints .js and the files an override names,
-      // so without this entry the scripts were never linted.
+      // (what `npm run lint`, `expo lint .`, runs) only lints .js and the files
+      // an override names, so without this entry the scripts were never linted.
       files: ["scripts/**/*.mjs"],
       env: { node: true },
       parserOptions: { sourceType: "module", ecmaVersion: 2022 },
+      // Not React: docs-shots' page callback `use(call, frame)` is not React's use().
+      rules: { "react-hooks/rules-of-hooks": "off" },
     },
     {
       files: ["__tests__/**", "jest.*.js"],
       env: { jest: true },
-      rules: { "no-restricted-properties": "off" },
+      rules: {
+        "no-restricted-properties": "off",
+        // jest.mock factories and modules loaded after a mock need require().
+        "@typescript-eslint/no-require-imports": "off",
+      },
     },
   ],
 };

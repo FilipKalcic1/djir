@@ -1,6 +1,7 @@
 /**
  * The sign-up screen against a fake Clerk: the name reaches Clerk (R21), and a
  * wrong email code keeps the verification modal open with the reason (R15).
+ * The code step and "Verified" are one React Native Modal (AppModal).
  */
 import {
   act,
@@ -9,7 +10,7 @@ import {
   screen,
   within,
 } from "@testing-library/react-native";
-import { Alert } from "react-native";
+import { Alert, Modal } from "react-native";
 
 import SignUp from "@/app/(auth)/sign-up";
 
@@ -28,15 +29,20 @@ const mockClerk = {
 
 jest.mock("@clerk/clerk-expo", () => ({
   useSignUp: () => mockClerk,
-  useOAuth: () => ({ startOAuthFlow: jest.fn() }),
+}));
+// Google sign-in has its own test (components/OAuth).
+jest.mock("@/components/OAuth", () => ({
+  __esModule: true,
+  default: () => null,
 }));
 jest.mock("expo-router", () => {
   const React = require("react");
   const { Text } = require("react-native");
   return {
     ...require("../helpers/mocks/expo-router"),
-    Link: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(Text, null, children),
+    // A Text that keeps the Link's props (href, dismissTo, …).
+    Link: ({ children, ...props }: { children: React.ReactNode }) =>
+      React.createElement(Text, { testID: "link", ...props }, children),
   };
 });
 jest.mock("expo-secure-store", () =>
@@ -57,20 +63,12 @@ async function press(name: string) {
   });
 }
 
-/** Lets the modals finish animating in or out. */
-async function finishAnimations() {
-  await act(async () => {
-    jest.advanceTimersByTime(1000);
-  });
-}
-
-/** Types a code and submits it; a modal that is going to close has closed. */
+/** Types a code and submits it. */
 async function enterCode(code: string) {
   fireEvent.changeText(screen.getByPlaceholderText("12345"), code);
   await act(async () => {
     fireEvent.press(screen.getByTestId("verification-submit"));
   });
-  await finishAnimations();
 }
 
 /** Fills the form and submits it, reaching the verification step. */
@@ -78,12 +76,9 @@ async function signUpAs(name = "Ana Horvat") {
   render(<SignUp />);
   fillForm(name, "ana@example.com", "correct horse battery");
   await press("Sign Up");
-  await finishAnimations();
 }
 
-// The modals animate on timers; fake ones keep those frames inside the test.
 beforeEach(() => {
-  jest.useFakeTimers();
   resetRouter();
   resetSecureStore();
   mockClerk.isLoaded = true;
@@ -98,7 +93,6 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  jest.useRealTimers();
 });
 
 describe("sign-up — creating the account (R21)", () => {
@@ -161,6 +155,15 @@ describe("sign-up — creating the account (R21)", () => {
     ).not.toHaveBeenCalled();
     expect(screen.queryByTestId("verification-modal")).toBeNull();
     expect(screen.getByRole("button", { name: "Sign Up" })).toBeEnabled();
+  });
+
+  it("the Log In link swaps to sign-in rather than stacking it (expo-router 57's Link pushes by default)", () => {
+    render(<SignUp />);
+
+    const link = screen.getByTestId("link");
+    expect(link).toHaveTextContent("Already have an account? Log In");
+    expect(link).toHaveProp("href", "/sign-in");
+    expect(link).toHaveProp("dismissTo", true);
   });
 
   it("does nothing until Clerk has loaded", async () => {
@@ -231,6 +234,23 @@ describe("sign-up — verifying the email (R15)", () => {
     expect(
       screen.getByText("You have successfully verified your account."),
     ).toBeOnTheScreen();
+  });
+
+  it("R15: the code step and 'Verified' are one modal that stays up in between — iOS cannot present a second one while the first closes", async () => {
+    mockClerk.signUp.attemptEmailAddressVerification.mockResolvedValue({
+      status: "complete",
+      createdSessionId: "sess_1",
+    });
+    await signUpAs();
+    const [modal] = screen.UNSAFE_getAllByType(Modal);
+    expect(modal.props.visible).toBe(true);
+
+    await enterCode("424242");
+
+    expect(screen.UNSAFE_getAllByType(Modal)).toEqual([modal]);
+    expect(modal.props.visible).toBe(true);
+    expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
+    expect(screen.queryByTestId("verification-modal")).toBeNull();
   });
 
   it("once verified, Browse Home replaces the stack with Home", async () => {

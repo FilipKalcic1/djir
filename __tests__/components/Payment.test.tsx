@@ -1,8 +1,9 @@
 /**
  * The "Confirm Ride" button, state by state (WP1 "Payment client states"
- * P1–P9, K6, R09/R16/R70/R71/R75). The Stripe mock runs the real confirm
- * handler from services/payment when the sheet is presented; only the network
- * calls (booking, quotes), Clerk, Stripe, deep links and navigation are faked.
+ * P1–P9, K6, R09/R16/R70/R71/R75, EG5/EG6). The Stripe mock runs the real
+ * confirm handler from services/payment when the sheet is presented; only the
+ * network calls (booking, quotes), Clerk, Stripe, deep links and navigation
+ * are faked. expo-linking answers as it does in Expo Go.
  */
 import {
   act,
@@ -15,7 +16,10 @@ import {
 import * as Linking from "expo-linking";
 import { ActivityIndicator, Alert, Platform } from "react-native";
 
-import Payment, { QUOTE_REFRESH_AFTER_MS } from "@/components/Payment";
+import Payment, {
+  PAYMENTS_NOT_SET_UP,
+  QUOTE_REFRESH_AFTER_MS,
+} from "@/components/Payment";
 import WebPayment from "@/components/Payment.web";
 import { ApiError } from "@/services/api";
 import { bookRide, BookingResponse, confirmRide } from "@/services/booking";
@@ -47,8 +51,10 @@ jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@stripe/stripe-react-native", () =>
   require("../helpers/mocks/stripe"),
 );
+// Links as Expo Go makes them: the dev server's address, then /--/ and the path.
 jest.mock("expo-linking", () => ({
   addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  createURL: jest.fn((path: string) => `exp://192.168.1.20:8081/--/${path}`),
 }));
 jest.mock("@/services/booking", () => ({
   ...jest.requireActual("@/services/booking"),
@@ -137,7 +143,18 @@ const SLOT = Date.parse("2026-10-04T06:00:00.000Z"); // Sunday 08:00 in Zagreb
 
 let alert: jest.SpyInstance;
 
+// Set on process.env itself: the client project reads EXPO_PUBLIC_* keys
+// through expo/virtual/env, which holds that object.
+const savedStripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+const setStripeKey = (value: string | undefined) => {
+  if (value === undefined)
+    delete process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  else process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = value;
+};
+afterAll(() => setStripeKey(savedStripeKey));
+
 beforeEach(() => {
+  setStripeKey("pk_test_51NdjirPublishable");
   jest.useFakeTimers({ now: NOW });
   resetStripe();
   resetClerk();
@@ -199,16 +216,17 @@ describe("Payment — P1/P2: idle and in flight", () => {
 });
 
 describe("Payment — R71/R75: the sheet's set-up", () => {
-  it("R71: the sheet is initialised for exactly quote.fareCents in eur, card only, returning to djir://stripe-redirect", async () => {
+  it("R71 EG6: the sheet is initialised for exactly quote.fareCents in eur, card only, returning to the running app's stripe-redirect link (Expo Go's exp://…/--/stripe-redirect)", async () => {
     renderPayment(quoteOf({ fareCents: 1337 }));
 
     tapConfirm();
     await waitFor(() => expect(presentPaymentSheet).toHaveBeenCalledTimes(1));
 
+    expect(Linking.createURL).toHaveBeenCalledWith("stripe-redirect");
     expect(initPaymentSheet).toHaveBeenCalledTimes(1);
     expect(initPaymentSheet).toHaveBeenCalledWith({
       merchantDisplayName: "Djir",
-      returnURL: "djir://stripe-redirect",
+      returnURL: "exp://192.168.1.20:8081/--/stripe-redirect",
       intentConfiguration: {
         mode: { amount: 1337, currencyCode: "eur" },
         paymentMethodTypes: ["card"],
@@ -949,6 +967,17 @@ describe("Payment — 3-D Secure return links", () => {
     expect(handleURLCallback).toHaveBeenCalledWith(url);
   });
 
+  it("EG6: Expo Go's own stripe-redirect link is handed to handleURLCallback too", () => {
+    renderPayment();
+
+    const url =
+      "exp://192.168.1.20:8081/--/stripe-redirect?payment_intent=pi_42";
+    act(() => urlListener()({ url }));
+
+    expect(handleURLCallback).toHaveBeenCalledTimes(1);
+    expect(handleURLCallback).toHaveBeenCalledWith(url);
+  });
+
   it("other links are not handed to Stripe", () => {
     renderPayment();
 
@@ -964,6 +993,50 @@ describe("Payment — 3-D Secure return links", () => {
     unmount();
 
     expect(subscription.remove).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("Payment — EG5: no Stripe publishable key", () => {
+  it.each([
+    ["unset", undefined],
+    ["empty", ""],
+    ["a secret key in its place", "sk_test_51NdjirSecret"],
+  ])(
+    "EG5: with the key %s, the button is off and says which key to add; a tap opens no sheet",
+    (_, key) => {
+      setStripeKey(key);
+      renderPayment();
+
+      expect(screen.getByTestId("payment-not-set-up")).toBeOnTheScreen();
+      expect(screen.getByText(PAYMENTS_NOT_SET_UP)).toHaveStyle({
+        color: colors.danger["700"],
+      });
+      expect(PAYMENTS_NOT_SET_UP).toBe(
+        "Payments aren't set up in this build: add EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (pk_test_…) to .env.local and restart npx expo start.",
+      );
+      expect(confirmButton()).toHaveTextContent("Confirm Ride");
+      expect(confirmButton()).toBeDisabled();
+      tapConfirm();
+      expect(initPaymentSheet).not.toHaveBeenCalled();
+      expect(presentPaymentSheet).not.toHaveBeenCalled();
+      expect(mockBookRide).not.toHaveBeenCalled();
+      expect(mockAddEventListener).not.toHaveBeenCalled();
+    },
+  );
+
+  it("EG5: a scheduled ride's button keeps its 'Schedule Ride' label", () => {
+    setStripeKey(undefined);
+    renderPayment(quoteOf({ scheduledAt: SLOT }));
+
+    expect(confirmButton()).toHaveTextContent("Schedule Ride");
+    expect(confirmButton()).toBeDisabled();
+  });
+
+  it("EG5: with a publishable key the button is live and nothing says payments are off", () => {
+    renderPayment();
+
+    expect(screen.queryByTestId("payment-not-set-up")).toBeNull();
+    expect(confirmButton()).toBeEnabled();
   });
 });
 

@@ -6,28 +6,33 @@
  */
 import { useFonts } from "expo-font";
 import { Slot } from "expo-router";
-import { ReactNativeModal } from "react-native-modal";
+import { useEffect, useState } from "react";
 
 import { setServerTime } from "@/services/clock";
 
 import { NOW } from "../fixtures";
-import { SHOT_HEIGHT, SHOT_WIDTH } from "../Shot";
 
 // Components that read the server clock see the fixture's instant.
 setServerTime(new Date(NOW).toISOString());
 
-// Modals open at once, inside the phone frame being captured (a Shot), not
-// over the whole page.
-Object.assign(ReactNativeModal.defaultProps ?? {}, {
-  animationIn: "fadeIn",
-  animationInTiming: 1,
-  backdropTransitionInTiming: 1,
-  coverScreen: false,
-  deviceWidth: SHOT_WIDTH,
-  deviceHeight: SHOT_HEIGHT,
-});
+// Modals (components/AppModal, on React Native's Modal) are fixed to the
+// viewport on the web; scripts/docs-shots.mjs captures each Shot in a viewport
+// of exactly its size, so a modal covers the phone frame and nothing more.
+// react-native-web's Modal moves focus into itself (a focus trap), onto the
+// full-frame backdrop, and Chrome would draw its focus ring around the frame.
+// Nothing in a still render is focused by a person, so no ring is drawn.
+if (typeof document !== "undefined") {
+  const style = document.createElement("style");
+  style.textContent = ":focus, :focus-visible { outline: none !important; }";
+  document.head.appendChild(style);
+}
 
 export default function GalleryLayout() {
+  // Rendered in the browser only, never by the static export: hydration keeps
+  // the server's styles, and @gorhom/bottom-sheet v5 sizes its handle from the
+  // window width at import, which is 0 on the server (no grab handle).
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
   const [loaded] = useFonts({
     "Jakarta-Bold": require("../../../assets/fonts/PlusJakartaSans-Bold.ttf"),
     "Jakarta-ExtraBold": require("../../../assets/fonts/PlusJakartaSans-ExtraBold.ttf"),
@@ -35,5 +40,5 @@ export default function GalleryLayout() {
     Jakarta: require("../../../assets/fonts/PlusJakartaSans-Regular.ttf"),
     "Jakarta-SemiBold": require("../../../assets/fonts/PlusJakartaSans-SemiBold.ttf"),
   });
-  return loaded ? <Slot /> : null;
+  return loaded && mounted ? <Slot /> : null;
 }

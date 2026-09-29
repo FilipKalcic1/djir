@@ -28,6 +28,8 @@ jobs:
         os: [ubuntu-latest, windows-latest]
     steps:
       - uses: actions/checkout@v4
+      # .nvmrc: Node 24 LTS. React Native 0.86 and Metro need ^20.19.4,
+      # ^22.13.0, ^24.3.0 or >=25; Clerk's wallet dependencies need >=22.
       - uses: actions/setup-node@v4
         with:
           node-version-file: .nvmrc
@@ -45,6 +47,11 @@ jobs:
           # Publishable keys are public; placeholders let the static render run.
           EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY: pk_test_Y2xlcmsuZXhhbXBsZS5jb20k
           EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY: pk_test_placeholder
+      # The JavaScript Expo Go and a native build load: Metro must resolve and
+      # transform every native import (the web export uses the .web.tsx stubs).
+      - name: iOS bundle builds (what Expo Go loads)
+        if: runner.os == 'Linux'
+        run: npx expo export -p ios
 
   ml:
     runs-on: ubuntu-latest

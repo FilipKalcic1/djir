@@ -53,7 +53,7 @@ function configFromEnv(): AuthConfig {
   };
 }
 
-function base64UrlToBytes(input: string): Uint8Array {
+function base64UrlToBytes(input: string): Uint8Array<ArrayBuffer> {
   const base64 = input.replace(/-/g, "+").replace(/_/g, "/");
   const binary = atob(base64 + "=".repeat((4 - (base64.length % 4)) % 4));
   return Uint8Array.from(binary, (c) => c.charCodeAt(0));
@@ -105,7 +105,7 @@ export async function verifySessionToken(
 
   let header: Record<string, unknown>;
   let payload: Record<string, unknown>;
-  let signature: Uint8Array;
+  let signature: Uint8Array<ArrayBuffer>;
   try {
     header = decodeJson(headerB64);
     payload = decodeJson(payloadB64);

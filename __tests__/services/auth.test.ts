@@ -1,7 +1,7 @@
 /**
  * services/auth — Clerk's token cache and the Google sign-in flow (R10).
- * SecureStore is an in-memory fake; expo-linking and Clerk's startOAuthFlow
- * are stubbed at the boundary.
+ * SecureStore is an in-memory fake; expo-linking and Clerk's startSSOFlow
+ * (useSSO, @clerk/clerk-expo 2.20) are stubbed at the boundary.
  */
 import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
@@ -89,13 +89,17 @@ describe("tokenCache", () => {
 });
 
 describe("googleOAuth", () => {
-  it("R10: redirects back to Home", async () => {
-    const startOAuthFlow = flow({ createdSessionId: null });
+  it("R10: runs Clerk's Google SSO flow, redirecting back to Home through the running app's own URL", async () => {
+    const startSSOFlow = flow({ createdSessionId: null });
 
-    await googleOAuth(startOAuthFlow);
+    await googleOAuth(startSSOFlow);
 
     expect(Linking.createURL).toHaveBeenCalledWith("/(root)/(tabs)/home");
-    expect(startOAuthFlow).toHaveBeenCalledWith({ redirectUrl: HOME_URL });
+    expect(startSSOFlow).toHaveBeenCalledTimes(1);
+    expect(startSSOFlow).toHaveBeenCalledWith({
+      strategy: "oauth_google",
+      redirectUrl: HOME_URL,
+    });
   });
 
   it("R10: a created session is activated and the rider is signed in", async () => {

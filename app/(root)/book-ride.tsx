@@ -74,9 +74,11 @@ const BookRide = () => {
   const shown = useRef<Trip | null>(null);
 
   // K6: the server refused the pickup time — back to Find ride's picker.
+  // dismissTo pops back to it: since expo-router 4, navigate would push a
+  // second Find ride on top of this screen.
   useFocusEffect(
     useCallback(() => {
-      if (slotNotice !== null) router.navigate("/(root)/find-ride");
+      if (slotNotice !== null) router.dismissTo("/(root)/find-ride");
     }, [slotNotice]),
   );
 

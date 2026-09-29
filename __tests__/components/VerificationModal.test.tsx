@@ -1,8 +1,10 @@
 /**
  * The sign-up email-code step. A wrong code must leave the modal open with the
- * reason, so the rider can correct it and try again (R15).
+ * reason, so the rider can correct it and try again (R15). Once the code is
+ * accepted, the same modal says "Verified".
  */
-import { act, fireEvent, render, screen } from "@testing-library/react-native";
+import { fireEvent, render, screen } from "@testing-library/react-native";
+import { Modal } from "react-native";
 import palette from "tailwindcss/colors";
 
 import VerificationModal from "@/components/VerificationModal";
@@ -13,6 +15,7 @@ type Props = React.ComponentProps<typeof VerificationModal>;
 function renderModal(props: Partial<Props> = {}) {
   const onChangeCode = jest.fn();
   const onVerify = jest.fn();
+  const onBrowseHome = jest.fn();
   const element = (overrides: Partial<Props>) => (
     <VerificationModal
       visible
@@ -22,6 +25,7 @@ function renderModal(props: Partial<Props> = {}) {
       verifying={false}
       onChangeCode={onChangeCode}
       onVerify={onVerify}
+      onBrowseHome={onBrowseHome}
       {...props}
       {...overrides}
     />
@@ -30,25 +34,10 @@ function renderModal(props: Partial<Props> = {}) {
   return {
     onChangeCode,
     onVerify,
+    onBrowseHome,
     update: (overrides: Partial<Props>) => screen.rerender(element(overrides)),
   };
 }
-
-/** Lets the modal finish animating in or out. */
-async function finishAnimations() {
-  await act(async () => {
-    jest.advanceTimersByTime(1000);
-  });
-}
-
-// The modal animates on timers; fake ones keep those frames inside the test.
-beforeEach(() => {
-  jest.useFakeTimers();
-});
-
-afterEach(() => {
-  jest.useRealTimers();
-});
 
 describe("VerificationModal", () => {
   it("asks for the code sent to the rider's email", () => {
@@ -83,12 +72,10 @@ describe("VerificationModal", () => {
     expect(onVerify).toHaveBeenCalledTimes(1);
   });
 
-  it("R15: an error is shown in red and the modal stays open for another try", async () => {
+  it("R15: an error is shown in red and the modal stays open for another try", () => {
     const { update } = renderModal({ code: "000000" });
-    await finishAnimations();
 
     update({ error: "Incorrect code" });
-    await finishAnimations();
 
     const error = screen.getByTestId("verification-error");
     expect(error).toHaveTextContent("Incorrect code");
@@ -128,13 +115,42 @@ describe("VerificationModal", () => {
     expect(screen.queryByTestId("verification-modal")).toBeNull();
   });
 
-  it("closes once the screen hides it", async () => {
+  it("closes once the screen hides it", () => {
     const { update } = renderModal();
-    await finishAnimations();
 
     update({ visible: false });
-    await finishAnimations();
 
     expect(screen.queryByTestId("verification-modal")).toBeNull();
+  });
+
+  it("once verified, says so and offers Browse Home in place of the code form", () => {
+    const { onBrowseHome, onVerify } = renderModal({ verified: true });
+
+    const done = screen.getByTestId("verification-success");
+    expect(screen.getByRole("header")).toHaveTextContent("Verified");
+    expect(done).toHaveTextContent(
+      /You have successfully verified your account\./,
+    );
+    expect(screen.queryByTestId("verification-modal")).toBeNull();
+    expect(screen.queryByPlaceholderText("12345")).toBeNull();
+
+    fireEvent.press(screen.getByTestId("verification-browse-home"));
+
+    expect(screen.getByTestId("verification-browse-home")).toHaveTextContent(
+      "Browse Home",
+    );
+    expect(onBrowseHome).toHaveBeenCalledTimes(1);
+    expect(onVerify).not.toHaveBeenCalled();
+  });
+
+  it("the code step and 'Verified' share one modal that stays up in between, so iOS never presents a second one", () => {
+    const { update } = renderModal({ code: "424242" });
+    const modal = screen.UNSAFE_getByType(Modal);
+
+    update({ code: "424242", verified: true });
+
+    expect(screen.UNSAFE_getAllByType(Modal)).toEqual([modal]);
+    expect(modal.props.visible).toBe(true);
+    expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
   });
 });

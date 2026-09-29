@@ -51,6 +51,11 @@ export async function reminderPermission({
 /**
  * Hand one reminder to the OS, on the device clock (N8). One already due on
  * this device is skipped: iOS refuses a trigger in the past (N9).
+ *
+ * The trigger names its type (N1): expo-notifications 57 reads a trigger
+ * object as a date only with `type: DATE`. Without it, `parseTrigger` takes
+ * `{ date, channelId }` for a channel-only trigger, which is delivered at once
+ * (a channel trigger on Android, `null` — "now" — on iOS).
  */
 async function schedule(reminder: Reminder): Promise<void> {
   const deviceAtMs = reminder.atMs - serverClockOffsetMs();
@@ -62,7 +67,11 @@ async function schedule(reminder: Reminder): Promise<void> {
       body: reminder.body,
       data: { rideId: reminder.rideId },
     },
-    trigger: { date: deviceAtMs, channelId: REMINDER_CHANNEL },
+    trigger: {
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: deviceAtMs,
+      channelId: REMINDER_CHANNEL,
+    },
   });
 }
 

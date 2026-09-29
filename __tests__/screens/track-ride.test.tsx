@@ -18,6 +18,7 @@ import { fetchResponse } from "../helpers/fetch";
 import { resetClerk } from "../helpers/mocks/clerk";
 import {
   resetRouter,
+  router,
   useLocalSearchParams,
 } from "../helpers/mocks/expo-router";
 import { makeRide, MIN } from "../helpers/rides";
@@ -197,6 +198,40 @@ describe("which ride", () => {
     );
     expect(screen.getByTestId("tracking-map")).toBeOnTheScreen();
     expect(screen.getByTestId("ride-cancel")).toBeOnTheScreen();
+  });
+});
+
+describe("leaving the tracker (expo-router 57)", () => {
+  it("S4: Back Home pops back to the Home tab — it never pushes a second copy of the tabs over the tracker", async () => {
+    await open("7", history([scheduled]));
+
+    fireEvent.press(screen.getByTestId("tracking-back-home"));
+
+    expect(router.dismissTo).toHaveBeenCalledTimes(1);
+    expect(router.dismissTo).toHaveBeenCalledWith("/(root)/(tabs)/home");
+    expect(router.navigate).not.toHaveBeenCalled();
+    expect(router.push).not.toHaveBeenCalled();
+  });
+
+  it("the back arrow goes back to the screen below", async () => {
+    router.canGoBack.mockReturnValue(true);
+    await open("7", history([scheduled]));
+
+    fireEvent.press(screen.getByTestId("ride-layout-back"));
+
+    expect(router.back).toHaveBeenCalledTimes(1);
+    expect(router.dismissTo).not.toHaveBeenCalled();
+  });
+
+  it("with nothing below (a cold-start deep link or reminder tap), the back arrow goes Home", async () => {
+    router.canGoBack.mockReturnValue(false);
+    await open("7", history([scheduled]));
+
+    fireEvent.press(screen.getByTestId("ride-layout-back"));
+
+    expect(router.back).not.toHaveBeenCalled();
+    expect(router.dismissTo).toHaveBeenCalledWith("/(root)/(tabs)/home");
+    expect(router.navigate).not.toHaveBeenCalled();
   });
 });
 

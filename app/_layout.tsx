@@ -4,35 +4,42 @@ import * as Notifications from "expo-notifications";
 import { Stack } from "expo-router";
 import * as SplashScreen from "expo-splash-screen";
 import { useEffect } from "react";
-import { LogBox } from "react-native";
+import { LogBox, StyleSheet } from "react-native";
+import { GestureHandlerRootView } from "react-native-gesture-handler";
 import "react-native-reanimated";
 
+import SetupNeeded from "@/components/SetupNeeded";
+import { canStart, checkAppKeys } from "@/lib/setup";
 import { tokenCache } from "@/services/auth";
+import { appKeyValues } from "@/services/setup";
 
-// Prevent the splash screen from auto-hiding before asset loading is complete.
+// Keep the splash screen up until the fonts are ready (called at module scope,
+// as expo-splash-screen asks, so it is not too late).
 SplashScreen.preventAutoHideAsync();
 
 // Show ride reminders even while the app is open.
 Notifications.setNotificationHandler({
   handleNotification: async () => ({
-    shouldShowAlert: true,
+    shouldShowBanner: true,
+    shouldShowList: true,
     shouldPlaySound: true,
     shouldSetBadge: false,
   }),
 });
 
-const publishableKey = process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY!;
-
-if (!publishableKey) {
-  throw new Error(
-    "Missing Publishable Key. Please set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in your .env",
-  );
-}
-
 LogBox.ignoreLogs(["Clerk:"]);
 
+const styles = StyleSheet.create({ root: { flex: 1 } });
+
+/**
+ * The app's root. Without a valid EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY there is
+ * nothing to sign in to, and ClerkProvider would throw: the "Setup needed"
+ * screen says what to add instead (EG1). Everything sits in one
+ * GestureHandlerRootView, which @gorhom/bottom-sheet v5 needs at the root
+ * (EG7).
+ */
 export default function RootLayout() {
-  const [loaded] = useFonts({
+  const [loaded, fontError] = useFonts({
     "Jakarta-Bold": require("../assets/fonts/PlusJakartaSans-Bold.ttf"),
     "Jakarta-ExtraBold": require("../assets/fonts/PlusJakartaSans-ExtraBold.ttf"),
     "Jakarta-ExtraLight": require("../assets/fonts/PlusJakartaSans-ExtraLight.ttf"),
@@ -41,31 +48,41 @@ export default function RootLayout() {
     Jakarta: require("../assets/fonts/PlusJakartaSans-Regular.ttf"),
     "Jakarta-SemiBold": require("../assets/fonts/PlusJakartaSans-SemiBold.ttf"),
   });
+  // A font that fails to load falls back to the system font: never a splash forever.
+  const ready = loaded || fontError !== null;
 
   useEffect(() => {
-    if (loaded) {
-      SplashScreen.hideAsync();
-    }
-  }, [loaded]);
+    if (ready) SplashScreen.hideAsync();
+  }, [ready]);
 
-  if (!loaded) {
-    return null;
-  }
+  if (!ready) return null;
+
+  const keys = appKeyValues();
+  const checks = checkAppKeys(keys);
 
   return (
-    <ClerkProvider tokenCache={tokenCache} publishableKey={publishableKey}>
-      <ClerkLoaded>
-        <Stack>
-          <Stack.Screen name="index" options={{ headerShown: false }} />
-          <Stack.Screen name="(auth)" options={{ headerShown: false }} />
-          <Stack.Screen name="(root)" options={{ headerShown: false }} />
-          <Stack.Screen
-            name="stripe-redirect"
-            options={{ headerShown: false }}
-          />
-          <Stack.Screen name="+not-found" />
-        </Stack>
-      </ClerkLoaded>
-    </ClerkProvider>
+    <GestureHandlerRootView style={styles.root}>
+      {canStart(checks) ? (
+        <ClerkProvider
+          tokenCache={tokenCache}
+          publishableKey={keys.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        >
+          <ClerkLoaded>
+            <Stack>
+              <Stack.Screen name="index" options={{ headerShown: false }} />
+              <Stack.Screen name="(auth)" options={{ headerShown: false }} />
+              <Stack.Screen name="(root)" options={{ headerShown: false }} />
+              <Stack.Screen
+                name="stripe-redirect"
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen name="+not-found" />
+            </Stack>
+          </ClerkLoaded>
+        </ClerkProvider>
+      ) : (
+        <SetupNeeded checks={checks} />
+      )}
+    </GestureHandlerRootView>
   );
 }

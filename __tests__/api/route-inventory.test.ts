@@ -1,5 +1,6 @@
 /**
- * Every API route requires a signed-in caller, except an explicit allowlist.
+ * Every API route requires a signed-in caller, except an explicit allowlist:
+ * the drivers on the map, a price quote, and the setup health check (EG2).
  * The routes are discovered from disk, so a route added later without
  * `requireUserId` fails here — it cannot slip through by not having a test.
  */
@@ -9,7 +10,7 @@ import { join, relative, sep } from "path";
 import { jsonRequest, applyTestAuthEnv } from "../helpers/auth";
 
 const API_DIR = join(__dirname, "..", "..", "app", "(api)");
-const PUBLIC = new Set(["GET driver", "POST predict-price"]);
+const PUBLIC = new Set(["GET driver", "POST predict-price", "GET health"]);
 const METHODS = ["GET", "POST", "PUT", "PATCH", "DELETE"];
 
 const routeFiles = (readdirSync(API_DIR, { recursive: true }) as string[])
@@ -26,6 +27,7 @@ describe("R01: API route inventory", () => {
     expect(routeFiles.map(routeName).sort()).toEqual(
       [
         "driver",
+        "health",
         "predict-price",
         "ride/book",
         "ride/cancel",

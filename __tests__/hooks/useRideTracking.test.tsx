@@ -87,7 +87,7 @@ describe("useRideTracking", () => {
     const clearIntervalSpy = jest.spyOn(globalThis, "clearInterval");
     const source = fakeSource();
     const { rerender } = renderHook(
-      ({ offsetMs }) =>
+      ({ offsetMs }: { offsetMs: number }) =>
         useRideTracking(tracked, {
           source,
           now: () => clockMs + offsetMs, // a fresh closure per render, as track-ride.tsx passes
@@ -115,7 +115,8 @@ describe("useRideTracking", () => {
     const clearIntervalSpy = jest.spyOn(globalThis, "clearInterval");
     const source = fakeSource();
     const { rerender } = renderHook(
-      ({ tickMs }) => useRideTracking(tracked, { source, now, tickMs }),
+      ({ tickMs }: { tickMs: number }) =>
+        useRideTracking(tracked, { source, now, tickMs }),
       { initialProps: { tickMs: TICK } },
     );
     const firstId = setIntervalSpy.mock.results[0].value;

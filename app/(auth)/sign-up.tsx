@@ -2,7 +2,6 @@ import { useSignUp } from "@clerk/clerk-expo";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { Alert, Image, ScrollView, Text, View } from "react-native";
-import { ReactNativeModal } from "react-native-modal";
 
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
@@ -108,6 +107,8 @@ const SignUp = () => {
           <OAuth />
           <Link
             href="/sign-in"
+            // expo-router 57's Link pushes: swap screens instead of stacking them.
+            dismissTo
             className="text-lg text-center text-general-200 mt-10"
           >
             Already have an account?{" "}
@@ -116,34 +117,16 @@ const SignUp = () => {
         </View>
 
         <VerificationModal
-          visible={step === "verifying"}
+          visible={step !== "form"}
+          verified={step === "done"}
           email={form.email.trim()}
           code={code}
           error={codeError}
           verifying={busy}
           onChangeCode={setCode}
           onVerify={onPressVerify}
+          onBrowseHome={() => router.replace("/(root)/(tabs)/home")}
         />
-
-        <ReactNativeModal isVisible={step === "done"}>
-          <View className="bg-white px-7 py-9 rounded-2xl min-h-[300px]">
-            <Image
-              source={images.check}
-              className="w-[110px] h-[110px] mx-auto my-5"
-            />
-            <Text className="text-3xl font-JakartaBold text-center">
-              Verified
-            </Text>
-            <Text className="text-base text-gray-400 font-Jakarta text-center mt-2">
-              You have successfully verified your account.
-            </Text>
-            <CustomButton
-              title="Browse Home"
-              onPress={() => router.replace("/(root)/(tabs)/home")}
-              className="mt-5"
-            />
-          </View>
-        </ReactNativeModal>
       </View>
     </ScrollView>
   );

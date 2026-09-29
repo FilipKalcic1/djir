@@ -376,7 +376,7 @@ function pngChunk(type, data) {
 function readPng(png) {
   let ihdr;
   const idat = [];
-  for (let at = PNG_SIGNATURE.length; at < png.length; ) {
+  for (let at = PNG_SIGNATURE.length; at < png.length;) {
     const length = png.readUInt32BE(at);
     const type = png.toString("ascii", at + 4, at + 8);
     const data = png.subarray(at + 8, at + 8 + length);

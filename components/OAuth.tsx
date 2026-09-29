@@ -1,4 +1,4 @@
-import { useOAuth } from "@clerk/clerk-expo";
+import { useSSO } from "@clerk/clerk-expo";
 import { router } from "expo-router";
 import { Alert, Image, Text, View } from "react-native";
 
@@ -6,12 +6,15 @@ import CustomButton from "@/components/CustomButton";
 import { icons } from "@/constants";
 import { googleOAuth } from "@/services/auth";
 
-/** "Log In with Google": lands on Home when it works, explains when it doesn't (R10). */
+/**
+ * "Log In with Google": lands on Home when it works, explains when it doesn't
+ * (R10). Clerk's SSO flow (`useSSO`; `useOAuth` is deprecated in 2.20).
+ */
 const OAuth = () => {
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+  const { startSSOFlow } = useSSO();
 
   const handleGoogleSignIn = async () => {
-    const result = await googleOAuth(startOAuthFlow);
+    const result = await googleOAuth(startSSOFlow);
     if (result.status === "signed-in") {
       router.replace("/(root)/(tabs)/home");
     } else if (result.status === "error") {

@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ScrollView, Text, TouchableOpacity, View } from "react-native";
-import { ReactNativeModal } from "react-native-modal";
 
+import AppModal from "@/components/AppModal";
 import CustomButton from "@/components/CustomButton";
 import { ScheduleDay, scheduleDays, Slot } from "@/lib/schedule";
 import { zagrebZoneName } from "@/lib/zagreb-time";
@@ -113,10 +113,10 @@ const ScheduleModal = ({
   const day = days.find((d) => d.key === dayKey) ?? days[0];
 
   return (
-    <ReactNativeModal
-      isVisible={visible}
+    <AppModal
+      visible={visible}
       onBackdropPress={onClose}
-      onBackButtonPress={onClose}
+      onRequestClose={onClose}
     >
       <View
         testID="schedule-modal"
@@ -204,7 +204,7 @@ const ScheduleModal = ({
           onPress={() => onConfirm(choice)}
         />
       </View>
-    </ReactNativeModal>
+    </AppModal>
   );
 };
 

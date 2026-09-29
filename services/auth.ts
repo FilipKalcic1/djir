@@ -30,17 +30,29 @@ export type OAuthResult =
   | { status: "cancelled" }
   | { status: "error"; message: string };
 
-type StartOAuthFlow = (options: { redirectUrl: string }) => Promise<{
-  createdSessionId?: string | null;
+/**
+ * Clerk's `startSSOFlow` (`useSSO()`, @clerk/clerk-expo 2.20, which deprecates
+ * `useOAuth`), as far as the Google sign-in uses it.
+ */
+export type StartSSOFlow = (params: {
+  strategy: "oauth_google";
+  redirectUrl: string;
+}) => Promise<{
+  createdSessionId: string | null;
   setActive?: (params: { session: string }) => Promise<void>;
 }>;
 
-/** Run Clerk's Google OAuth flow and activate the session it creates. */
+/**
+ * Run Clerk's Google SSO flow and activate the session it creates. The
+ * redirect comes from expo-linking, so it names the app that is running:
+ * `exp://<dev server>/--/…` in Expo Go, `djir://…` in a build.
+ */
 export async function googleOAuth(
-  startOAuthFlow: StartOAuthFlow,
+  startSSOFlow: StartSSOFlow,
 ): Promise<OAuthResult> {
   try {
-    const { createdSessionId, setActive } = await startOAuthFlow({
+    const { createdSessionId, setActive } = await startSSOFlow({
+      strategy: "oauth_google",
       redirectUrl: Linking.createURL("/(root)/(tabs)/home"),
     });
     if (!createdSessionId || !setActive) return { status: "cancelled" };

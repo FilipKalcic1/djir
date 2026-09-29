@@ -16,7 +16,12 @@ import { cancelReminder } from "@/services/reminders";
 import { Ride } from "@/types/type";
 
 const source = simulatedPosition(SPEEDUP);
-const goHome = () => router.navigate("/(root)/(tabs)/home");
+/**
+ * Back to the Home tab: pops to the tabs if they are below (every in-app entry
+ * point), or replaces the tracker with them (a cold-start deep link or reminder
+ * tap). navigate would push a second copy of the tabs on top (expo-router 4+).
+ */
+const goHome = () => router.dismissTo("/(root)/(tabs)/home");
 /** Where the sheet rests, in % of the screen: the map frames the ride above it (MP7). */
 const SHEET_REST_PERCENT = 45;
 

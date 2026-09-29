@@ -66,10 +66,10 @@ const Map = () => {
     <MapView
       ref={mapRef}
       provider={PROVIDER_DEFAULT}
-      className="w-full h-full rounded-2xl"
+      style={{ width: "100%", height: "100%", borderRadius: 16 }}
       tintColor="black"
       mapType="mutedStandard"
-      showsPointsOfInterest={false}
+      showsPointsOfInterests={false}
       initialRegion={region}
       showsUserLocation
       userInterfaceStyle="light"

@@ -6,7 +6,10 @@
  */
 import path from "path";
 
-import { REPO_ROOT } from "../helpers/repo";
+import appConfig from "../../app.config";
+import { read, REPO_ROOT } from "../helpers/repo";
+
+import type { ConfigContext } from "expo/config";
 
 type LintMessage = {
   ruleId: string | null;
@@ -26,6 +29,7 @@ type Linter = {
     options: { filePath: string; warnIgnored: boolean },
   ): Promise<LintResult[]>;
   lintFiles(patterns: string[]): Promise<LintResult[]>;
+  isPathIgnored(filePath: string): Promise<boolean>;
 };
 
 jest.setTimeout(120_000);
@@ -39,7 +43,7 @@ const RAW_HEX = "Use a tailwind.config.js colour token, not a raw hex class.";
 const HEX_VALUE =
   "Read the colour from tailwind.config.js, not a raw hex value.";
 const HERMES =
-  "AbortSignal.timeout does not exist on Hermes (React Native 0.74).";
+  "AbortSignal.timeout does not exist on Hermes (React Native's AbortSignal polyfill has no timeout, still in 0.86).";
 const DEVICE_CLOCK =
   "Read wall-clock time via lib/zagreb-time.ts (Europe/Zagreb), never the device clock.";
 const LIB_FRAMEWORK = "lib/ is pure: no React, React Native, Expo or Clerk.";
@@ -366,5 +370,109 @@ describe("wall-clock time only via lib/zagreb-time.ts", () => {
     expect(
       await reports("__tests__/x.test.ts", source, "no-restricted-properties"),
     ).toEqual([]);
+  });
+});
+
+describe("eslint-config-expo 57 on this app", () => {
+  /** Each react-hooks report on `source` at `filePath`, as `{ rule, line, severity }`. */
+  async function hookReports(filePath: string, source: string) {
+    return (await lint(filePath, source))
+      .filter((m) => m.ruleId?.startsWith("react-hooks/"))
+      .map(({ ruleId, line, severity }) => ({ rule: ruleId, line, severity }));
+  }
+
+  it("the React Compiler-only react-hooks rules (refs, purity, immutability, set-state-in-effect) are off; rules-of-hooks stays an error and exhaustive-deps a warning", async () => {
+    const source = code(
+      'import { useEffect, useRef, useState } from "react";',
+      'import { Text } from "react-native";',
+      "",
+      "export function Ticker({ id }: { id: string }) {",
+      "  const renders = useRef(0);",
+      "  renders.current += 1;",
+      "  const [shownMs, setShownMs] = useState(0);",
+      "  useEffect(() => {",
+      "    setShownMs(0);",
+      "    start();",
+      "  }, [id]);",
+      "  const start = () => setShownMs(1);",
+      "  return <Text>{Date.now() + shownMs + renders.current}</Text>;",
+      "}",
+      "",
+      "export function Broken({ id, on }: { id: string; on: boolean }) {",
+      "  const [value, setValue] = useState(id);",
+      "  if (on) useRef(id);",
+      "  useEffect(() => setValue(id), []);",
+      "  return <Text>{value}</Text>;",
+      "}",
+    );
+
+    expect(await hookReports("components/X.tsx", source)).toEqual([
+      { rule: "react-hooks/rules-of-hooks", line: 18, severity: ERROR },
+      { rule: "react-hooks/exhaustive-deps", line: 19, severity: 1 },
+    ]);
+  });
+
+  it("those rules may stay off only while the React Compiler does: the resolved app config enables no compiler", () => {
+    const appJson = JSON.parse(read("app.json")).expo;
+    const context = {
+      projectRoot: REPO_ROOT,
+      staticConfigPath: path.join(REPO_ROOT, "app.json"),
+      packageJsonPath: path.join(REPO_ROOT, "package.json"),
+      config: appJson,
+    } as ConfigContext;
+
+    expect(appConfig(context).experiments).toEqual({ typedRoutes: true });
+  });
+
+  it("@typescript-eslint/no-require-imports is off under __tests__/**, where jest.mock factories need require(); app code still gets its warning", async () => {
+    const source = code(
+      'jest.mock("@/services/api", () => require("./mocks/api"));',
+      'export const api = require("@/services/api");',
+    );
+    const REQUIRE = "@typescript-eslint/no-require-imports";
+    const warning = (line: number) => ({
+      line,
+      message: "A `require()` style import is forbidden.",
+      severity: 1,
+    });
+
+    expect(await reports("__tests__/x.test.ts", source, REQUIRE)).toEqual([]);
+    expect(await reports("__tests__/X.test.tsx", source, REQUIRE)).toEqual([]);
+    expect(await reports("components/X.tsx", source, REQUIRE)).toEqual([
+      warning(1),
+      warning(2),
+    ]);
+  });
+
+  it("eslint . skips the generated, gitignored files (expo-env.d.ts, coverage, build output) and nothing the layer rules cover", async () => {
+    const ignored = async (files: string[]) => {
+      const flags = await Promise.all(
+        files.map((file) => eslint.isPathIgnored(path.join(REPO_ROOT, file))),
+      );
+      return files.filter((_, index) => flags[index]);
+    };
+    const generated = [
+      "expo-env.d.ts",
+      "coverage/lcov-report/sorter.js",
+      "dist/index.js",
+      "web-build/index.js",
+    ];
+    const covered = [
+      "lib/x.ts",
+      "server/x.ts",
+      "app/(api)/x+api.ts",
+      "app/(root)/x.tsx",
+      "app/_layout.tsx",
+      "components/X.tsx",
+      "hooks/useX.ts",
+      "services/x.ts",
+      "store/x.ts",
+      "scripts/x.mjs",
+      "__tests__/x.test.ts",
+      "nativewind-env.d.ts",
+    ];
+
+    expect(await ignored(generated)).toEqual(generated);
+    expect(await ignored(covered)).toEqual([]);
   });
 });

@@ -77,6 +77,8 @@ const SignIn = () => {
           <OAuth />
           <Link
             href="/sign-up"
+            // expo-router 57's Link pushes: swap screens instead of stacking them.
+            dismissTo
             className="text-lg text-center text-general-200 mt-10"
           >
             Don't have an account?{" "}

@@ -31,9 +31,14 @@ import {
 import { resetSecureStore, store } from "../helpers/mocks/expo-secure-store";
 import { makeRide, MIN } from "../helpers/rides";
 
-jest.mock("expo-notifications", () =>
-  require("../helpers/mocks/expo-notifications"),
-);
+// The shared fake, with the SDK's own trigger-type enum (expo-notifications 57
+// reads a trigger as a date only when it names its type; the fake predates it).
+jest.mock("expo-notifications", () => ({
+  ...require("../helpers/mocks/expo-notifications"),
+  SchedulableTriggerInputTypes: jest.requireActual(
+    "expo-notifications/build/Notifications.types",
+  ).SchedulableTriggerInputTypes,
+}));
 jest.mock("expo-secure-store", () =>
   require("../helpers/mocks/expo-secure-store"),
 );
@@ -179,11 +184,27 @@ describe("remindAbout", () => {
         data: { rideId: 42 },
       },
       trigger: {
+        type: "date",
         date: Date.parse("2026-10-04T05:43:00.000Z"),
         channelId: REMINDER_CHANNEL,
       },
     });
     expect(REMINDER_CHANNEL).toBe("ride-reminders");
+  });
+
+  it("N1: the trigger names its type, DATE: without it expo-notifications reads { date, channelId } as a channel-only trigger and shows the reminder at once", async () => {
+    granted();
+
+    await remindAbout(tomorrow8);
+
+    const { trigger } = jest.mocked(Notifications.scheduleNotificationAsync)
+      .mock.calls[0][0];
+    expect(Notifications.SchedulableTriggerInputTypes.DATE).toBe("date");
+    expect(trigger).toEqual({
+      type: Notifications.SchedulableTriggerInputTypes.DATE,
+      date: tomorrow8.atMs,
+      channelId: "ride-reminders",
+    });
   });
 
   it("N1 N3: asks first (in context, after booking) and schedules once allowed", async () => {
@@ -221,6 +242,7 @@ describe("remindAbout", () => {
       await remindAbout(tomorrow8); // due 05:43 on the server's clock
 
       expect(scheduled.get("ride-42")?.trigger).toEqual({
+        type: "date",
         date: Date.parse(deviceIso),
         channelId: "ride-reminders",
       });
@@ -258,7 +280,7 @@ describe("syncReminders", () => {
     ]);
     expect(scheduled.get("ride-3")).toMatchObject({
       content: { data: { rideId: 3 } },
-      trigger: { date: added.atMs, channelId: "ride-reminders" },
+      trigger: { type: "date", date: added.atMs, channelId: "ride-reminders" },
     });
   });
 

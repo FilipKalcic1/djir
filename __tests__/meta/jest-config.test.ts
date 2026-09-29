@@ -106,12 +106,20 @@ describe("projects", () => {
     expect(client.setupFilesAfterEnv).toEqual([
       "<rootDir>/__tests__/setup/client.ts",
     ]);
+    expect(read("__tests__/setup/client.ts")).toContain(
+      'import "@testing-library/react-native";',
+    );
+  });
+
+  it("RNTL 13 registers its matchers when the package is imported (v13 dropped the extend-expect entry point)", () => {
+    const rntl = path.dirname(
+      require.resolve("@testing-library/react-native/package.json"),
+    );
+
     expect(
-      fs.readFileSync(
-        path.join(REPO_ROOT, "__tests__/setup/client.ts"),
-        "utf8",
-      ),
-    ).toContain('import "@testing-library/react-native/extend-expect";');
+      fs.readFileSync(require.resolve("@testing-library/react-native"), "utf8"),
+    ).toContain('require("./matchers/extend-expect");');
+    expect(fs.existsSync(path.join(rntl, "extend-expect.js"))).toBe(false);
   });
 
   it("every test file under __tests__ runs in exactly one project, and the sentinel in both", () => {
@@ -245,19 +253,34 @@ describe("npm scripts and Node version (plan WP0)", () => {
     );
   });
 
-  it("check runs typecheck, then lint, then the tests with coverage", () => {
+  it("check runs typecheck, then lint of the whole repo, then the tests with coverage", () => {
+    // On SDK 57 a bare `expo lint` lints only src/, app/ and components/
+    // (@expo/cli's default inputs); the `.` keeps lib/, server/, hooks/,
+    // services/, store/ and scripts/ under the §8 layer rules.
     expect(pkg.scripts).toMatchObject({
       typecheck: "tsc --noEmit",
-      lint: "expo lint",
+      lint: "expo lint .",
       check: "npm run typecheck && npm run lint && npm run test:coverage",
     });
   });
 
-  it("requires Node 20 or later, and .nvmrc pins CI to 20", () => {
-    expect(pkg.engines).toEqual({ node: ">=20" });
-    expect(fs.readFileSync(path.join(REPO_ROOT, ".nvmrc"), "utf8").trim()).toBe(
-      "20",
+  it("requires a Node that React Native 0.86 and Metro accept, without Node 20 (Clerk's wallet dependencies need 22), and .nvmrc pins CI to Node 24 LTS", () => {
+    const lock = JSON.parse(read("package-lock.json"));
+    const reactNativeNodes = {
+      node: "^20.19.4 || ^22.13.0 || ^24.3.0 || >= 25.0.0",
+    };
+
+    expect(lock.packages["node_modules/react-native"].engines).toEqual(
+      reactNativeNodes,
     );
+    expect(lock.packages["node_modules/metro"].engines).toEqual(
+      reactNativeNodes,
+    );
+    expect(lock.packages["node_modules/@wallet-standard/base"].engines).toEqual(
+      { node: ">=22" },
+    );
+    expect(pkg.engines).toEqual({ node: "^22.13.0 || ^24.3.0 || >=25.0.0" });
+    expect(read(".nvmrc").trim()).toBe("24");
   });
 
   it("C6: every npm package a test or a script imports is declared in package.json, not only hoisted there by another package", () => {
@@ -351,7 +374,7 @@ describe("the CI workflow (plan §9, .github/workflows/ci.yml)", () => {
     ]);
   });
 
-  it("C6: the app job runs npm ci, the Expo SDK dependency check (ubuntu), npm run check and the web export, on ubuntu and windows", () => {
+  it("C6: the app job runs npm ci, the Expo SDK dependency check (ubuntu), npm run check, the web export and the iOS bundle Expo Go loads (ubuntu), on ubuntu and windows", () => {
     expect(app.strategy?.matrix.os).toEqual([
       "ubuntu-latest",
       "windows-latest",
@@ -368,6 +391,7 @@ describe("the CI workflow (plan §9, .github/workflows/ci.yml)", () => {
         run: "npm run web:css && npx expo export -p web",
         if: "runner.os == 'Linux'",
       },
+      { run: "npx expo export -p ios", if: "runner.os == 'Linux'" },
     ]);
   });
 
