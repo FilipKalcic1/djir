@@ -166,8 +166,8 @@ __tests__/    lib · server · api · db · services · store · components · h
 **Prerequisites:** Node.js 24 (see `.nvmrc`; 22.13 or newer also works), and Expo Go (SDK 57) on a device or an iOS or Android simulator. The maps and Stripe (including 3-D Secure returns) work best in a native build: `npx expo run:ios` or `npx expo run:android` (Android maps then need `GOOGLE_MAPS_ANDROID_API_KEY`).
 
 ```bash
-git clone https://github.com/FilipKalcic1/djir.git
-cd djir
+git clone https://github.com/FilipKalcic1/djir-fullstack.git
+cd djir-fullstack
 npm install
 cp .env.example .env.local      # then fill it in: each variable is explained there
 ```
