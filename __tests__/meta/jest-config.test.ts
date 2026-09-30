@@ -283,6 +283,18 @@ describe("npm scripts and Node version (plan WP0)", () => {
     expect(read(".nvmrc").trim()).toBe("24");
   });
 
+  it("EG8: react and react-dom are pinned to one exact version and installed at it: @clerk/react 6, under @clerk/expo, loads ReactDOM's client on iOS and Android too, which throws as it loads when the two differ", () => {
+    const lock = JSON.parse(read("package-lock.json"));
+    const installed = (name: string) =>
+      lock.packages[`node_modules/${name}`].version as string;
+    const react = installed("react");
+
+    expect({
+      declared: [pkg.dependencies.react, pkg.dependencies["react-dom"]],
+      installed: [react, installed("react-dom")],
+    }).toEqual({ declared: [react, react], installed: [react, react] });
+  });
+
   it("C6: every npm package a test or a script imports is declared in package.json, not only hoisted there by another package", () => {
     const declared = new Set([
       ...Object.keys(pkg.dependencies),

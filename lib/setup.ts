@@ -73,9 +73,11 @@ export interface AppKeyCheck extends AppKey {
 }
 
 /**
- * Whether `key` is a Clerk publishable key, by the rule ClerkProvider throws on
- * (`isPublishableKey` in @clerk/shared 3.48): `pk_test_` or `pk_live_`, then
- * base64 of the Frontend API host followed by exactly one "$".
+ * Whether `key` is a Clerk publishable key, by the rule ClerkProvider throws on:
+ * under @clerk/expo 4.7 it runs `new Clerk(key)` (@clerk/clerk-js 6.35), which
+ * applies `isPublishableKey` of @clerk/shared 4.37: `pk_test_` or `pk_live_`,
+ * then base64 of the Frontend API host followed by exactly one "$". Clerk
+ * trims the key first and this does not, so it never passes a key Clerk refuses.
  */
 export function isClerkPublishableKey(key: string): boolean {
   const parts = key.split("_");

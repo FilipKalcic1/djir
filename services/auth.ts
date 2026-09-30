@@ -5,6 +5,8 @@ import * as SecureStore from "expo-secure-store";
 
 import { clerkErrorMessage } from "@/lib/utils";
 
+import type { TokenCache } from "@clerk/expo";
+
 /** Clerk's token cache, backed by the device keychain / keystore. */
 export const tokenCache = {
   async getToken(key: string) {
@@ -23,7 +25,7 @@ export const tokenCache = {
       console.error("SecureStore write failed:", error);
     }
   },
-};
+} satisfies TokenCache;
 
 export type OAuthResult =
   | { status: "signed-in" }
@@ -31,7 +33,7 @@ export type OAuthResult =
   | { status: "error"; message: string };
 
 /**
- * Clerk's `startSSOFlow` (`useSSO()`, @clerk/clerk-expo 2.20, which deprecates
+ * Clerk's `startSSOFlow` (`useSSO()` from @clerk/expo 4.7, which deprecates
  * `useOAuth`), as far as the Google sign-in uses it.
  */
 export type StartSSOFlow = (params: {
@@ -41,6 +43,25 @@ export type StartSSOFlow = (params: {
   createdSessionId: string | null;
   setActive?: (params: { session: string }) => Promise<void>;
 }>;
+
+/**
+ * Make the session a finished sign-in, sign-up or Google sign-in created the
+ * active one, with Clerk's `setActive`. On iOS and Android, @clerk/clerk-js 6
+ * first "touches" the session on Clerk's server, and a touch that fails (a
+ * 5xx, a 429, a dropped connection) now fails setActive, where 2.20 ignored
+ * it. The session exists all the same, so it is tried once more before the
+ * error reaches the rider.
+ */
+export async function activateSession<Session>(
+  setActive: (params: { session: Session }) => Promise<unknown>,
+  session: Session,
+): Promise<void> {
+  try {
+    await setActive({ session });
+  } catch {
+    await setActive({ session });
+  }
+}
 
 /**
  * Run Clerk's Google SSO flow and activate the session it creates. The
@@ -56,7 +77,7 @@ export async function googleOAuth(
       redirectUrl: Linking.createURL("/(root)/(tabs)/home"),
     });
     if (!createdSessionId || !setActive) return { status: "cancelled" };
-    await setActive({ session: createdSessionId });
+    await activateSession(setActive, createdSessionId);
     return { status: "signed-in" };
   } catch (error) {
     return {

@@ -1,12 +1,14 @@
 import { act, renderHook } from "@testing-library/react-native";
 
 import { useFetch } from "@/hooks/useFetch";
+import { TIMEOUT_MESSAGE } from "@/services/api";
 
 import { settle } from "../helpers/async";
 import { fetchResponse } from "../helpers/fetch";
+import * as clerk from "../helpers/mocks/clerk";
 import { auth, resetClerk } from "../helpers/mocks/clerk";
 
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 
 type Body = { data: string[]; server_time?: string };
 
@@ -337,5 +339,154 @@ describe("useFetch", () => {
     expect(consoleError).not.toHaveBeenCalled();
     expect(result.current.data).toBeNull();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("useFetch — timeoutMs covers the session token too (H10, S2)", () => {
+  /**
+   * Offline, @clerk/clerk-js 6's getToken retries for about 2.7 minutes
+   * before it fails; within a test, it simply never answers.
+   */
+  const tokenNeverComes = () =>
+    auth.getToken.mockImplementation(() => new Promise<string>(() => {}));
+
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it("H10 S2: a session token with no answer counts towards timeoutMs: the load then fails with 'No answer from the server…', and nothing is sent", async () => {
+    tokenNeverComes();
+    const { result } = renderHook(() =>
+      useFetch<string[], Body>("/(api)/rides", {
+        authenticated: true,
+        timeoutMs: 10_000,
+      }),
+    );
+
+    await act(() => jest.advanceTimersByTimeAsync(9_999));
+    expect(state(result)).toEqual({
+      data: null,
+      body: null,
+      loading: true,
+      error: null,
+    });
+    await act(() => jest.advanceTimersByTimeAsync(1));
+
+    expect(state(result)).toEqual({
+      data: null,
+      body: null,
+      loading: false,
+      error: TIMEOUT_MESSAGE,
+    });
+    expect(auth.getToken).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it("H10 S2: a token that comes in time leaves the rest of timeoutMs to the request, which is sent with it", async () => {
+    let token!: (value: string) => void;
+    auth.getToken.mockImplementation(
+      () => new Promise<string>((resolve) => (token = resolve)),
+    );
+    const { result } = renderHook(() =>
+      useFetch<string[], Body>("/(api)/rides", {
+        authenticated: true,
+        timeoutMs: 10_000,
+      }),
+    );
+
+    await act(() => jest.advanceTimersByTimeAsync(4_000));
+    await act(async () => token("token-1"));
+    expect(fetchMock.mock.calls).toEqual([
+      [
+        "/(api)/rides",
+        {
+          headers: { Authorization: "Bearer token-1" },
+          signal: expect.any(AbortSignal),
+        },
+      ],
+    ]);
+    await act(() => jest.advanceTimersByTimeAsync(5_999));
+    expect(result.current.loading).toBe(true);
+    await act(() => jest.advanceTimersByTimeAsync(1));
+
+    expect(state(result)).toEqual({
+      data: null,
+      body: null,
+      loading: false,
+      error: TIMEOUT_MESSAGE,
+    });
+    expect(requests[0].init.signal!.aborted).toBe(true);
+  });
+});
+
+describe("useFetch — one load per url, whatever useAuth returns (EG9)", () => {
+  /**
+   * @clerk/expo's useAuth wraps getToken in a new function on every render
+   * (dist/hooks/useAuth.js), unlike the shared mock's single `auth.getToken`.
+   * Each render's getToken here reads its own token, so a stale one shows.
+   */
+  let renders: number;
+  beforeEach(() => {
+    renders = 0;
+    jest.spyOn(clerk, "useAuth").mockImplementation(() => {
+      const render = ++renders;
+      return { ...auth, getToken: jest.fn(async () => `token-${render}`) };
+    });
+  });
+
+  it.each([
+    ["/(api)/driver", false],
+    ["/(api)/rides", true],
+  ])(
+    "EG9: %s (authenticated: %s) is loaded once, not again after every answer and every render",
+    async (url, authenticated) => {
+      const { result, rerender } = renderHook(() =>
+        useFetch<string[], Body>(url, { authenticated }),
+      );
+      await settle();
+      await answer(0, 200, { data: ["a"] });
+      rerender({});
+      await settle();
+
+      expect(renders).toBeGreaterThan(2);
+      expect(fetchMock.mock.calls).toEqual([
+        [
+          url,
+          { headers: authenticated ? { Authorization: "Bearer token-1" } : {} },
+        ],
+      ]);
+      expect(state(result)).toEqual({
+        data: ["a"],
+        body: { data: ["a"] },
+        loading: false,
+        error: null,
+      });
+    },
+  );
+
+  it("EG9: refetch keeps its identity across renders, and sends the latest render's session token", async () => {
+    const { result, rerender } = renderHook(() =>
+      useFetch<string[], Body>("/(api)/rides", { authenticated: true }),
+    );
+    await settle();
+    await answer(0, 200, { data: ["first"] });
+    const refetch = result.current.refetch;
+    rerender({});
+    await settle();
+    expect(result.current.refetch).toBe(refetch);
+    const latest = renders; // the last render before the refetch
+    expect(latest).toBeGreaterThan(1);
+
+    await act(() => {
+      result.current.refetch();
+    });
+    await settle();
+
+    expect(fetchMock.mock.calls).toEqual([
+      ["/(api)/rides", { headers: { Authorization: "Bearer token-1" } }],
+      [
+        "/(api)/rides",
+        { headers: { Authorization: `Bearer token-${latest}` } },
+      ],
+    ]);
   });
 });

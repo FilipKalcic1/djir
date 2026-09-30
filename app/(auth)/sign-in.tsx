@@ -1,4 +1,4 @@
-import { useSignIn } from "@clerk/clerk-expo";
+import { useSignIn } from "@clerk/expo/legacy";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { Alert, Image, ScrollView, Text, View } from "react-native";
@@ -8,26 +8,45 @@ import InputField from "@/components/InputField";
 import OAuth from "@/components/OAuth";
 import { icons, images } from "@/constants";
 import { clerkErrorMessage } from "@/lib/utils";
+import { activateSession } from "@/services/auth";
+
+/** A sign-in that completed, but whose session could not be made active. */
+type Unactivated = { identifier: string; session: string | null };
 
 const SignIn = () => {
   const { signIn, setActive, isLoaded } = useSignIn();
   const [form, setForm] = useState({ email: "", password: "" });
   const [submitting, setSubmitting] = useState(false);
+  // Clerk holds that session for this phone and would refuse a second
+  // sign-in, so Sign In for the same email retries only the activation.
+  const [unactivated, setUnactivated] = useState<Unactivated | null>(null);
 
   const onSignInPress = async () => {
     if (!isLoaded) return;
     setSubmitting(true);
+    const identifier = form.email.trim();
     try {
-      const attempt = await signIn.create({
-        identifier: form.email.trim(),
-        password: form.password,
-      });
-      if (attempt.status === "complete") {
-        await setActive({ session: attempt.createdSessionId });
-        router.replace("/(root)/(tabs)/home");
+      let session: string | null;
+      if (unactivated?.identifier === identifier) {
+        session = unactivated.session;
       } else {
-        Alert.alert("Sign in", "Log in failed. Please try again.");
+        const attempt = await signIn.create({
+          identifier,
+          password: form.password,
+        });
+        if (attempt.status !== "complete") {
+          Alert.alert("Sign in", "Log in failed. Please try again.");
+          return;
+        }
+        session = attempt.createdSessionId;
       }
+      try {
+        await activateSession(setActive, session);
+      } catch (err) {
+        setUnactivated({ identifier, session });
+        throw err;
+      }
+      router.replace("/(root)/(tabs)/home");
     } catch (err) {
       Alert.alert(
         "Sign in",

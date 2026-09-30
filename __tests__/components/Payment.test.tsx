@@ -47,7 +47,7 @@ import { makeRide, MIN } from "../helpers/rides";
 import { colors } from "../helpers/tokens";
 
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@stripe/stripe-react-native", () =>
   require("../helpers/mocks/stripe"),
 );

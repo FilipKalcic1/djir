@@ -51,6 +51,10 @@ describe("isClerkPublishableKey (what ClerkProvider throws on)", () => {
     ["a host with a second $", clerkKey("clerk$.djir.app")],
     ["a host without a dot", clerkKey("localhost")],
     ["a placeholder", "pk_test_xxx"],
+    [
+      "a key with a leading space (checked as bundled, untrimmed)",
+      ` ${CLERK_KEY}`,
+    ],
   ])("EG1: refuses %s", (_, key) => {
     expect(isClerkPublishableKey(key)).toBe(false);
   });

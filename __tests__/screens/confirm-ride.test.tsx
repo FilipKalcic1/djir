@@ -33,7 +33,7 @@ import { resetClerk } from "../helpers/mocks/clerk";
 import { refocus, resetRouter, router } from "../helpers/mocks/expo-router";
 
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@/services/quotes", () => ({
   ...jest.requireActual("@/services/quotes"),
   fetchQuote: jest.fn(),

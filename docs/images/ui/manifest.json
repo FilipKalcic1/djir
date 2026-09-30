@@ -79,7 +79,7 @@
     "lib/rides.ts": "4b171234066df7ab45764f607c9e1fae3efcc34b68ec4e12a0c3df5e7c2ee485",
     "lib/schedule.ts": "3a26721549e7b3e792e5b3abdacf598394d1fdad9c20cacbb22492611f6111a1",
     "lib/tracking.ts": "d905db782cd47c2fcd72c176b056b07c306f6fd7afbc628e4bde701b12c51db5",
-    "lib/utils.ts": "9f98d461d95d8bdec04f82fe0a5572909375e10b556c9001aa2043e377bada76",
+    "lib/utils.ts": "4cc4307cc2c55d7649b8c355d692c1421a5bfe843c2234af6f090ded1716bef0",
     "lib/zagreb-time.ts": "55ec3687cd00cc67d693d5dec5736bffd95333ffbb46118fd5ebeef32e3c23de",
     "services/clock.ts": "f4fa504adef4383bcc6f44b05b4b244a639840c18608e06701c8bcafea82150f",
     "services/reminders.ts": "ec6cdae5f10f5fcc8661ad041931cb578fa95e5f7b90f5f8679b95ce866c2d7a",

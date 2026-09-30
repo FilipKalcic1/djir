@@ -1,9 +1,9 @@
 /**
- * "Log In with Google": Clerk's SSO flow (`useSSO`, @clerk/clerk-expo 2.20,
- * which deprecates `useOAuth`) is the boundary; the real googleOAuth service
+ * "Log In with Google": Clerk's SSO flow (`useSSO`, @clerk/expo 4.7, which
+ * deprecates `useOAuth`) is the boundary; the real googleOAuth service
  * decides signed-in / cancelled / error (R10).
  */
-import { useSSO } from "@clerk/clerk-expo";
+import { useSSO } from "@clerk/expo";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import * as Linking from "expo-linking";
 import { Alert } from "react-native";
@@ -13,8 +13,8 @@ import OAuth from "@/components/OAuth";
 import { resetRouter, router } from "../helpers/mocks/expo-router";
 import { resetSecureStore } from "../helpers/mocks/expo-secure-store";
 
-// The shared Clerk mock, plus Clerk 2.20's useSSO.
-jest.mock("@clerk/clerk-expo", () => ({
+// The shared Clerk mock, plus @clerk/expo's useSSO.
+jest.mock("@clerk/expo", () => ({
   ...require("../helpers/mocks/clerk"),
   useSSO: jest.fn(),
 }));
@@ -132,13 +132,16 @@ describe("OAuth", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("R10: if activating the session fails, the rider is told and stays put", async () => {
-    setActive.mockRejectedValueOnce(new Error("Session expired"));
+  it("R10: if activating the session fails on its second try too, the rider is told and stays put", async () => {
+    setActive
+      .mockRejectedValueOnce(new Error("Session expired"))
+      .mockRejectedValueOnce(new Error("Session expired"));
     startSSOFlow.mockResolvedValue({ createdSessionId: "sess_1", setActive });
     render(<OAuth />);
 
     await pressGoogle();
 
+    expect(setActive).toHaveBeenCalledTimes(2);
     expect(Alert.alert).toHaveBeenCalledWith(
       "Google sign-in failed",
       "Session expired",

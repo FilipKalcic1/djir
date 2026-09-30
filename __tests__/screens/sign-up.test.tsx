@@ -1,7 +1,9 @@
 /**
  * The sign-up screen against a fake Clerk: the name reaches Clerk (R21), and a
  * wrong email code keeps the verification modal open with the reason (R15).
- * The code step and "Verified" are one React Native Modal (AppModal).
+ * The code step and "Verified" are one React Native Modal (AppModal). The fake
+ * stands in for @clerk/expo/legacy, which keeps Clerk's Core 2 useSignUp
+ * (EG8); @clerk/expo's own useSignUp is Core 3's, a different API.
  */
 import {
   act,
@@ -27,7 +29,7 @@ const mockClerk = {
   setActive: jest.fn(),
 };
 
-jest.mock("@clerk/clerk-expo", () => ({
+jest.mock("@clerk/expo/legacy", () => ({
   useSignUp: () => mockClerk,
 }));
 // Google sign-in has its own test (components/OAuth).
@@ -96,7 +98,7 @@ afterEach(() => {
 });
 
 describe("sign-up — creating the account (R21)", () => {
-  it("R21: the entered name goes to Clerk as unsafeMetadata, with the trimmed email", async () => {
+  it("R21 EG8: the entered name goes to Clerk as unsafeMetadata, with the trimmed email", async () => {
     render(<SignUp />);
     fillForm("  Ana Horvat ", " ana@example.com ", "correct horse battery");
 
@@ -214,7 +216,7 @@ describe("sign-up — verifying the email (R15)", () => {
     expect(mockClerk.setActive).not.toHaveBeenCalled();
   });
 
-  it("R15: after a wrong code the rider can retry, and the right one signs them in", async () => {
+  it("R15 EG8: after a wrong code the rider can retry, and the right one signs them in", async () => {
     mockClerk.signUp.attemptEmailAddressVerification
       .mockRejectedValueOnce(WRONG_CODE)
       .mockResolvedValueOnce({
@@ -251,6 +253,62 @@ describe("sign-up — verifying the email (R15)", () => {
     expect(modal.props.visible).toBe(true);
     expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
     expect(screen.queryByTestId("verification-modal")).toBeNull();
+  });
+
+  it("R15 EG8: a correct code whose session activation fails once is activated on a second try: Verified", async () => {
+    // On iOS and Android, @clerk/clerk-js 6's setActive first touches the
+    // session on Clerk's server, and a touch that fails (a 5xx, a 429, a
+    // dropped connection) now rejects it: 2.20 ignored that failure.
+    mockClerk.signUp.attemptEmailAddressVerification.mockResolvedValue({
+      status: "complete",
+      createdSessionId: "sess_1",
+    });
+    mockClerk.setActive.mockRejectedValueOnce(
+      new Error("Oops, an unexpected error occurred."),
+    );
+    await signUpAs();
+
+    await enterCode("424242");
+
+    expect(mockClerk.setActive.mock.calls).toEqual([
+      [{ session: "sess_1" }],
+      [{ session: "sess_1" }],
+    ]);
+    expect(screen.getByText("Verified")).toBeOnTheScreen();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it("R15 EG8: a correct code whose session can't be activated is not asked for again: the modal says the account is ready, and Verify Email retries only the activation", async () => {
+    // Clerk now holds the new account's session for this phone: the spent
+    // code would be refused, and so would a second sign-in.
+    mockClerk.signUp.attemptEmailAddressVerification.mockResolvedValue({
+      status: "complete",
+      createdSessionId: "sess_1",
+    });
+    mockClerk.setActive
+      .mockRejectedValueOnce(new Error("Oops, an unexpected error occurred."))
+      .mockRejectedValueOnce(new Error("Oops, an unexpected error occurred."));
+    await signUpAs();
+
+    await enterCode("424242");
+
+    expect(mockClerk.setActive).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("verification-error")).toHaveTextContent(
+      "Your account is ready, but we couldn't sign you in. Check your connection and tap Verify Email again.",
+    );
+    expect(screen.queryByText("Verified")).toBeNull();
+    expect(Alert.alert).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("verification-submit"));
+    });
+
+    expect(
+      mockClerk.signUp.attemptEmailAddressVerification,
+    ).toHaveBeenCalledTimes(1);
+    expect(mockClerk.setActive).toHaveBeenCalledTimes(3);
+    expect(mockClerk.setActive).toHaveBeenLastCalledWith({ session: "sess_1" });
+    expect(screen.getByText("Verified")).toBeOnTheScreen();
   });
 
   it("once verified, Browse Home replaces the stack with Home", async () => {

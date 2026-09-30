@@ -3,12 +3,13 @@
  * Clerk's getToken are faked; fetchAPI is real.
  */
 
-import { ApiError } from "@/services/api";
+import { ApiError, TIMEOUT_MESSAGE, TOKEN_TIMEOUT_MS } from "@/services/api";
 import {
   bookRide,
   BookingRequest,
   cancelRide,
   confirmRide,
+  GetToken,
   sheetError,
 } from "@/services/booking";
 
@@ -241,6 +242,55 @@ describe("cancelRide", () => {
     expect(error).toBeInstanceOf(ApiError);
     expect(error).toMatchObject({ message, status: 409 });
     expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("a session token with no answer (offline, @clerk/clerk-js 6 retries one for about 2.7 minutes)", () => {
+  /** A getToken that never answers, as far as a test can tell. */
+  const tokenNeverComes = () =>
+    jest.fn<Promise<string | null>, []>(() => new Promise(() => {}));
+  /** Where a call stands: "pending", or what it resolved or rejected with. */
+  const track = (call: Promise<unknown>) => {
+    const outcome = { current: "pending" as unknown };
+    call.then(
+      (value) => (outcome.current = value),
+      (error: unknown) => (outcome.current = error),
+    );
+    return outcome;
+  };
+
+  beforeEach(() => jest.useFakeTimers());
+
+  it.each([
+    ["P8: bookRide", (getToken: GetToken) => bookRide(request, getToken)],
+    ["X9: cancelRide", (getToken: GetToken) => cancelRide(9, getToken)],
+  ])(
+    "%s gives up after TOKEN_TIMEOUT_MS with 'No answer from the server…', and nothing is sent",
+    async (_, call) => {
+      const outcome = track(call(tokenNeverComes()));
+
+      await jest.advanceTimersByTimeAsync(TOKEN_TIMEOUT_MS - 1);
+      expect(outcome.current).toBe("pending");
+      await jest.advanceTimersByTimeAsync(1);
+
+      expect(outcome.current).toEqual(new Error(TIMEOUT_MESSAGE));
+      expect(fetchMock).not.toHaveBeenCalled();
+    },
+  );
+
+  it("P7: confirmRide's three attempts each give up on the token after TOKEN_TIMEOUT_MS, so the rider hears within 33 s, not 8 minutes", async () => {
+    const getToken = tokenNeverComes();
+    const outcome = track(confirmRide(7, getToken));
+
+    // 3 × 10 s for the token, plus the 800 ms and 1600 ms backoffs.
+    await jest.advanceTimersByTimeAsync(3 * TOKEN_TIMEOUT_MS + 2_400 - 1);
+    expect(outcome.current).toBe("pending");
+    await jest.advanceTimersByTimeAsync(1);
+
+    expect(outcome.current).toEqual(new Error(TIMEOUT_MESSAGE));
+    expect(getToken).toHaveBeenCalledTimes(3);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 });
 

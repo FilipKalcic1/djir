@@ -48,7 +48,7 @@ import type { PaymentProps } from "@/components/Payment";
 const mockPayment = { real: false, props: null as PaymentProps | null };
 
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@stripe/stripe-react-native", () =>
   require("../helpers/mocks/stripe"),
 );

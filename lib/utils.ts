@@ -18,12 +18,27 @@ export function formatEur(amount: number): string {
   return `€${amount.toFixed(2)}`;
 }
 
-/** The message to show for an error from Clerk, fetch, or anything else. */
+/** What the rider reads when a request could not reach its server at all. */
+export const NETWORK_ERROR_MESSAGE =
+  "Couldn't connect. Check your internet connection and try again.";
+
+/**
+ * A connection that failed, as React Native's fetch reports it ("Network
+ * request failed") or as @clerk/clerk-js 6 wraps it ("ClerkJS: Network error
+ * at <its own endpoint URL> …").
+ */
+const NETWORK_FAILURE = /^(ClerkJS: Network error|Network request failed)/;
+
+/**
+ * The message to show for an error from Clerk, fetch, or anything else; a
+ * failed connection reads as NETWORK_ERROR_MESSAGE (R20).
+ */
 export function clerkErrorMessage(error: unknown, fallback: string): string {
   const clerk = (error as { errors?: { longMessage?: string }[] })?.errors;
   const message =
     clerk?.[0]?.longMessage ?? (error as { message?: unknown })?.message;
-  return typeof message === "string" && message ? message : fallback;
+  if (typeof message !== "string" || !message) return fallback;
+  return NETWORK_FAILURE.test(message) ? NETWORK_ERROR_MESSAGE : message;
 }
 
 interface NamedUser {

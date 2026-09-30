@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { StripeProvider, useStripe } from "@stripe/stripe-react-native";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
@@ -146,7 +146,8 @@ const PaymentButton = ({
     return () => {
       active = false;
     };
-    // Runs once per unknown outcome; getToken and onBooked are stable.
+    // Runs once per unknown outcome. getToken is a new function on every
+    // render (@clerk/expo), but each one reads the current session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unknown]);
 

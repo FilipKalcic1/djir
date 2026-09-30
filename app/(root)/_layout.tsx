@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import * as Notifications from "expo-notifications";
 import { router, Stack, useGlobalSearchParams, usePathname } from "expo-router";
 import { useEffect, useRef } from "react";

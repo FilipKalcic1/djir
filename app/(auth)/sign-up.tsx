@@ -1,4 +1,4 @@
-import { useSignUp } from "@clerk/clerk-expo";
+import { useSignUp } from "@clerk/expo/legacy";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { Alert, Image, ScrollView, Text, View } from "react-native";
@@ -9,8 +9,16 @@ import OAuth from "@/components/OAuth";
 import VerificationModal from "@/components/VerificationModal";
 import { icons, images } from "@/constants";
 import { clerkErrorMessage, signUpParams } from "@/lib/utils";
+import { activateSession } from "@/services/auth";
 
 type Step = "form" | "verifying" | "done";
+
+/**
+ * The code was accepted, but the new account's session could not be made
+ * active (R15): Verify Email now retries only that.
+ */
+const ACCOUNT_READY =
+  "Your account is ready, but we couldn't sign you in. Check your connection and tap Verify Email again.";
 
 const SignUp = () => {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -19,6 +27,12 @@ const SignUp = () => {
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The session of an account whose code was accepted, but which could not
+  // be made active. Clerk holds it for this phone and would refuse the spent
+  // code, and a second sign-in too, so Verify retries only the activation.
+  const [unactivated, setUnactivated] = useState<{
+    session: string | null;
+  } | null>(null);
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
@@ -43,15 +57,27 @@ const SignUp = () => {
     if (!isLoaded) return;
     setBusy(true);
     try {
-      const result = await signUp.attemptEmailAddressVerification({
-        code: code.trim(),
-      });
-      if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
-        setStep("done");
+      let session: string | null;
+      if (unactivated) {
+        session = unactivated.session;
       } else {
-        setCodeError("Verification failed. Please try again.");
+        const result = await signUp.attemptEmailAddressVerification({
+          code: code.trim(),
+        });
+        if (result.status !== "complete") {
+          setCodeError("Verification failed. Please try again.");
+          return;
+        }
+        session = result.createdSessionId;
       }
+      try {
+        await activateSession(setActive, session);
+      } catch {
+        setUnactivated({ session });
+        setCodeError(ACCOUNT_READY);
+        return;
+      }
+      setStep("done");
     } catch (err) {
       // Keep the modal open with the reason, so the rider can retry (R15).
       setCodeError(

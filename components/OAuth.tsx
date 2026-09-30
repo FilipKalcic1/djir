@@ -1,4 +1,4 @@
-import { useSSO } from "@clerk/clerk-expo";
+import { useSSO } from "@clerk/expo";
 import { router } from "expo-router";
 import { Alert, Image, Text, View } from "react-native";
 
@@ -8,7 +8,7 @@ import { googleOAuth } from "@/services/auth";
 
 /**
  * "Log In with Google": lands on Home when it works, explains when it doesn't
- * (R10). Clerk's SSO flow (`useSSO`; `useOAuth` is deprecated in 2.20).
+ * (R10). Clerk's SSO flow (`useSSO`; `useOAuth` is deprecated in @clerk/expo 4.7).
  */
 const OAuth = () => {
   const { startSSOFlow } = useSSO();

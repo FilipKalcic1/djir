@@ -18,6 +18,7 @@ import {
   displayName,
   formatEur,
   formatMinutes,
+  NETWORK_ERROR_MESSAGE,
   placeName,
   signUpParams,
 } from "@/lib/utils";
@@ -208,13 +209,32 @@ describe("clerkErrorMessage (R20)", () => {
       { errors: [{ longMessage: "Password is incorrect." }] },
       "Password is incorrect.",
     ],
-    [new TypeError("Network request failed"), "Network request failed"],
+    [new Error("Too many requests."), "Too many requests."],
     [{ errors: [] }, "Try again"],
     [undefined, "Try again"],
     ["boom", "Try again"],
   ])("R20: %p → %s", (error, text) => {
     expect(clerkErrorMessage(error, "Try again")).toBe(text);
   });
+
+  it.each([
+    ["React Native's fetch", new TypeError("Network request failed")],
+    [
+      // @clerk/clerk-js 6 wraps it, naming Clerk's own endpoint (EG8).
+      "Clerk",
+      new Error(
+        'ClerkJS: Network error at "https://clever-cat-12.clerk.accounts.dev/v1/client/sign_ins?__clerk_api_version=2026-05-12&_clerk_js_version=6.35.0&_is_native=1" - TypeError: Network request failed. Please try again.',
+      ),
+    ],
+  ])(
+    "R20: a connection that failed, as %s reports it, reads as one plain line instead",
+    (_, error) => {
+      expect(clerkErrorMessage(error, "Try again")).toBe(NETWORK_ERROR_MESSAGE);
+      expect(NETWORK_ERROR_MESSAGE).toBe(
+        "Couldn't connect. Check your internet connection and try again.",
+      );
+    },
+  );
 });
 
 describe("displayName (R21)", () => {

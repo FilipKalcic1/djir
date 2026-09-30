@@ -138,7 +138,7 @@ The full story is in [`docs/REVIEW.md`](docs/REVIEW.md) (what was broken), [`doc
 | App | React Native 0.86 (New Architecture) · React 19 · Expo SDK 57 · Expo Router 57 (screens **and** API routes) · TypeScript |
 | UI | NativeWind 2 (Tailwind) · Plus Jakarta Sans · `@gorhom/bottom-sheet` 5 · `react-native-maps` · Reanimated 4 |
 | State | Zustand |
-| Auth | Clerk (email + password with email verification, Google sign-in), verified server-side with WebCrypto |
+| Auth | Clerk via `@clerk/expo` (email + password with email verification, Google sign-in), verified server-side with WebCrypto |
 | Payments | Stripe Payment Sheet (deferred intent) · `stripe` on the server |
 | Database | Neon serverless Postgres |
 | Reminders | `expo-notifications` (local) |
@@ -205,7 +205,7 @@ With `.env.local` still empty, the app opens on **Setup needed** instead of cras
 | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` + `STRIPE_SECRET_KEY` (test keys) | paying for a ride (test card 4242 4242 4242 4242); until then Book Ride names the key to add |
 | `EXPO_PUBLIC_PLACES_API_KEY` | optional: address search. Without it, From and To offer a list of popular Zagreb places |
 
-In Expo Go the map is Apple Maps (no key needed), `EXPO_PUBLIC_API_ORIGIN` stays empty, and ride reminders arrive as Expo Go notifications. A yellow "Clerk - DEPRECATION WARNING" note at the bottom of the screen is Clerk announcing its next package name; it is harmless in development.
+In Expo Go the map is Apple Maps (no key needed), `EXPO_PUBLIC_API_ORIGIN` stays empty, and ride reminders arrive as Expo Go notifications.
 
 ## 📜 Scripts
 

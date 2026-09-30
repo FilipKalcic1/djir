@@ -23,7 +23,7 @@ import {
 } from "../helpers/mocks/expo-router";
 import { makeRide, MIN } from "../helpers/rides";
 
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
 jest.mock("@/services/reminders", () => ({
   syncReminders: jest.fn(async () => {}),

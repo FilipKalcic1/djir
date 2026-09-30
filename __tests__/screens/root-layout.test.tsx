@@ -15,7 +15,7 @@
  * Navigation and notifications are the shared mocks (the latter keeps the OS's
  * last tap); the booking data hook is not what this test is about.
  */
-import { ClerkProvider } from "@clerk/clerk-expo";
+import { ClerkProvider } from "@clerk/expo";
 import { act, render, screen } from "@testing-library/react-native";
 import { useFonts } from "expo-font";
 import * as Notifications from "expo-notifications";
@@ -42,7 +42,7 @@ import {
 } from "../helpers/mocks/expo-router";
 
 // The shared Clerk mock, plus a provider that records its props.
-jest.mock("@clerk/clerk-expo", () => {
+jest.mock("@clerk/expo", () => {
   const { createElement } = require("react");
   const { View } = require("react-native");
   return {
