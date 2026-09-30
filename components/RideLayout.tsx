@@ -66,7 +66,14 @@ const RideLayout = ({
           {map}
         </View>
 
-        <BottomSheet ref={bottomSheetRef} snapPoints={snapPoints} index={0}>
+        <BottomSheet
+          ref={bottomSheetRef}
+          snapPoints={snapPoints}
+          index={0}
+          // bottom-sheet v5 adds a snap point at the content's height unless
+          // told not to; the sheet must rest where the screen says (MP7).
+          enableDynamicSizing={false}
+        >
           {scrollable ? (
             <BottomSheetScrollView
               testID="ride-layout-sheet"

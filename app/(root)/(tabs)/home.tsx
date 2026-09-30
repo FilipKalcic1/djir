@@ -1,4 +1,4 @@
-import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/expo";
 import { router } from "expo-router";
 import { Image, Text, TouchableOpacity, View } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
@@ -31,7 +31,9 @@ const Home = () => {
   const { rides, loading, error, refetch, nowMs } = useRides();
 
   const handleSignOut = async () => {
-    await signOut();
+    // Offline, @clerk/clerk-js 6 signs this phone out and then rethrows its
+    // failed request to Clerk's server: the rest must run all the same.
+    await signOut().catch(() => {});
     resetSession(); // the next user must not see this user's trip (R52)
     await cancelAllReminders().catch(() => {});
     router.replace("/(auth)/sign-in");

@@ -1,6 +1,6 @@
 import { Image, Text, View } from "react-native";
-import { ReactNativeModal } from "react-native-modal";
 
+import AppModal from "@/components/AppModal";
 import CustomButton from "@/components/CustomButton";
 import { images } from "@/constants";
 import { pickupSentence } from "@/lib/schedule";
@@ -32,7 +32,7 @@ const BookingSuccessModal = ({
 }: BookingSuccessModalProps) => {
   const scheduled = scheduledAt !== null;
   return (
-    <ReactNativeModal isVisible={visible} onBackButtonPress={onBackHome}>
+    <AppModal visible={visible} onRequestClose={onBackHome}>
       <View
         testID={scheduled ? "booking-success-scheduled" : "booking-success"}
         className="flex flex-col items-center justify-center bg-white p-7 rounded-2xl"
@@ -66,7 +66,7 @@ const BookingSuccessModal = ({
           onPress={onBackHome}
         />
       </View>
-    </ReactNativeModal>
+    </AppModal>
   );
 };
 

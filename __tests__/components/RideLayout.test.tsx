@@ -158,6 +158,15 @@ describe("RideLayout — map and sheet", () => {
     expect(sheet.props.index).toBe(0);
   });
 
+  it("MP7: the sheet rests at the snap points it is given — bottom-sheet v5's content-height snap point (dynamic sizing, on by default) is off", () => {
+    renderLayout({ snapPoints: ["45%", "85%"] });
+
+    const sheet = screen.UNSAFE_getByType(BottomSheet);
+    expect(sheet.props.enableDynamicSizing).toBe(false);
+    expect(sheet.props.snapPoints).toEqual(["45%", "85%"]);
+    expect(sheet.props.index).toBe(0);
+  });
+
   it("passes custom snap points to the sheet", () => {
     renderLayout({ snapPoints: ["65%", "85%"] });
 

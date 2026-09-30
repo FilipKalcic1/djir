@@ -4,12 +4,13 @@
  * stray tap (no backdrop dismiss; Android back means Back Home).
  */
 import {
+  act,
   fireEvent,
   render,
   screen,
   within,
 } from "@testing-library/react-native";
-import { Image, Modal, TouchableWithoutFeedback } from "react-native";
+import { Image, Modal } from "react-native";
 import palette from "tailwindcss/colors";
 
 import BookingSuccessModal from "@/components/BookingSuccessModal";
@@ -21,7 +22,7 @@ const NOW = Date.parse("2026-10-03T19:00:00.000Z"); // Saturday 21:00 in Zagreb
 const TOMORROW_8 = Date.parse("2026-10-04T06:00:00.000Z"); // Sunday 08:00
 const TUESDAY_8 = Date.parse("2026-10-06T06:00:00.000Z"); // Tuesday 08:00
 
-// The modal animates in on timers; fake ones keep those frames out of the test.
+// A fixed clock for the pickup sentence.
 beforeEach(() => {
   jest.useFakeTimers({ now: NOW });
 });
@@ -162,7 +163,7 @@ describe("BookingSuccessModal — no accidental dismiss", () => {
     (_, scheduledAt, testID) => {
       const { onOpenRide, onBackHome } = renderModal({ scheduledAt });
 
-      fireEvent.press(screen.UNSAFE_getByType(TouchableWithoutFeedback));
+      fireEvent.press(screen.getByTestId("modal-backdrop"));
 
       expect(onBackHome).not.toHaveBeenCalled();
       expect(onOpenRide).not.toHaveBeenCalled();
@@ -173,7 +174,8 @@ describe("BookingSuccessModal — no accidental dismiss", () => {
   it("F7 W7: Android back means Back Home", () => {
     const { onOpenRide, onBackHome } = renderModal();
 
-    fireEvent(screen.UNSAFE_getByType(Modal), "requestClose");
+    // The native Modal's own handler: what Android's back button calls.
+    act(() => screen.UNSAFE_getByType(Modal).props.onRequestClose());
 
     expect(onBackHome).toHaveBeenCalledTimes(1);
     expect(onOpenRide).not.toHaveBeenCalled();

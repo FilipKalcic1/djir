@@ -6,7 +6,10 @@
  */
 import path from "path";
 
-import { REPO_ROOT } from "../helpers/repo";
+import appConfig from "../../app.config";
+import { read, REPO_ROOT } from "../helpers/repo";
+
+import type { ConfigContext } from "expo/config";
 
 type LintMessage = {
   ruleId: string | null;
@@ -26,6 +29,7 @@ type Linter = {
     options: { filePath: string; warnIgnored: boolean },
   ): Promise<LintResult[]>;
   lintFiles(patterns: string[]): Promise<LintResult[]>;
+  isPathIgnored(filePath: string): Promise<boolean>;
 };
 
 jest.setTimeout(120_000);
@@ -39,7 +43,7 @@ const RAW_HEX = "Use a tailwind.config.js colour token, not a raw hex class.";
 const HEX_VALUE =
   "Read the colour from tailwind.config.js, not a raw hex value.";
 const HERMES =
-  "AbortSignal.timeout does not exist on Hermes (React Native 0.74).";
+  "AbortSignal.timeout does not exist on Hermes (React Native's AbortSignal polyfill has no timeout, still in 0.86).";
 const DEVICE_CLOCK =
   "Read wall-clock time via lib/zagreb-time.ts (Europe/Zagreb), never the device clock.";
 const LIB_FRAMEWORK = "lib/ is pure: no React, React Native, Expo or Clerk.";
@@ -49,6 +53,8 @@ const SERVER_ONLY = "Server-only code must never reach the app bundle.";
 const SERVER_APP = "Server code must not import the app.";
 const SERVER_CLIENT_SDK =
   "Server code runs on Node: no Expo, Clerk or Stripe React Native client SDK.";
+const DEPRECATED_CLERK =
+  "@clerk/clerk-expo is deprecated: use @clerk/expo (useSignIn and useSignUp from @clerk/expo/legacy).";
 
 const restricted = (source: string, why: string) =>
   `'${source}' import is restricted from being used by a pattern. ${why}`;
@@ -102,7 +108,8 @@ describe("lib/** is pure", () => {
 
   it("no-restricted-imports: React, React Native, Expo, Clerk and every layer above lib/ are errors; lib/ itself is not", async () => {
     const source = code(
-      'import { useAuth } from "@clerk/clerk-expo";',
+      'import { useAuth } from "@clerk/expo";',
+      'import { useSignIn } from "@clerk/expo/legacy";',
       'import { router } from "expo-router";',
       'import { useState } from "react";',
       'import { View } from "react-native";',
@@ -115,15 +122,16 @@ describe("lib/** is pure", () => {
     );
 
     expect(await reports("lib/x.ts", source, "no-restricted-imports")).toEqual([
-      error(1, restricted("@clerk/clerk-expo", LIB_FRAMEWORK)),
-      error(2, restricted("expo-router", LIB_FRAMEWORK)),
-      error(3, restricted("react", LIB_FRAMEWORK)),
-      error(4, restricted("react-native", LIB_FRAMEWORK)),
-      error(5, restricted("@/components/RideCard", LIB_LAYER)),
-      error(6, restricted("@/hooks/useFetch", LIB_LAYER)),
-      error(7, restricted("@/server/db", LIB_LAYER)),
-      error(8, restricted("@/services/api", LIB_LAYER)),
-      error(9, restricted("@/store", LIB_LAYER)),
+      error(1, restricted("@clerk/expo", LIB_FRAMEWORK)),
+      error(2, restricted("@clerk/expo/legacy", LIB_FRAMEWORK)),
+      error(3, restricted("expo-router", LIB_FRAMEWORK)),
+      error(4, restricted("react", LIB_FRAMEWORK)),
+      error(5, restricted("react-native", LIB_FRAMEWORK)),
+      error(6, restricted("@/components/RideCard", LIB_LAYER)),
+      error(7, restricted("@/hooks/useFetch", LIB_LAYER)),
+      error(8, restricted("@/server/db", LIB_LAYER)),
+      error(9, restricted("@/services/api", LIB_LAYER)),
+      error(10, restricted("@/store", LIB_LAYER)),
     ]);
   });
 
@@ -291,7 +299,8 @@ describe("server code never imports the app", () => {
     "no-restricted-imports: %s may not import an Expo, Clerk or Stripe React Native client SDK; their server SDKs are fine",
     async (filePath) => {
       const source = code(
-        'import { useAuth } from "@clerk/clerk-expo";',
+        'import { useAuth } from "@clerk/expo";',
+        'import { useSignIn } from "@clerk/expo/legacy";',
         'import { Ionicons } from "@expo/vector-icons";',
         'import { useStripe } from "@stripe/stripe-react-native";',
         'import { router } from "expo-router";',
@@ -302,11 +311,93 @@ describe("server code never imports the app", () => {
       );
 
       expect(await reports(filePath, source, "no-restricted-imports")).toEqual([
-        error(1, restricted("@clerk/clerk-expo", SERVER_CLIENT_SDK)),
-        error(2, restricted("@expo/vector-icons", SERVER_CLIENT_SDK)),
-        error(3, restricted("@stripe/stripe-react-native", SERVER_CLIENT_SDK)),
-        error(4, restricted("expo-router", SERVER_CLIENT_SDK)),
-        error(5, restricted("expo-secure-store", SERVER_CLIENT_SDK)),
+        error(1, restricted("@clerk/expo", SERVER_CLIENT_SDK)),
+        error(2, restricted("@clerk/expo/legacy", SERVER_CLIENT_SDK)),
+        error(3, restricted("@expo/vector-icons", SERVER_CLIENT_SDK)),
+        error(4, restricted("@stripe/stripe-react-native", SERVER_CLIENT_SDK)),
+        error(5, restricted("expo-router", SERVER_CLIENT_SDK)),
+        error(6, restricted("expo-secure-store", SERVER_CLIENT_SDK)),
+      ]);
+    },
+  );
+});
+
+describe("Clerk's deprecated Expo SDK is imported nowhere (EG8)", () => {
+  it.each([
+    "app/_layout.tsx",
+    "app/(auth)/x.tsx",
+    "app/(root)/x.tsx",
+    "components/X.tsx",
+    "hooks/useX.ts",
+    "services/x.ts",
+    "store/x.ts",
+    "__tests__/x.test.tsx",
+    "scripts/x.mjs",
+  ])(
+    "EG8: no-restricted-imports: %s may not import @clerk/clerk-expo or a subpath of it; @clerk/expo and @clerk/expo/legacy are fine",
+    async (filePath) => {
+      const source = code(
+        'import { ClerkProvider } from "@clerk/clerk-expo";',
+        'import { tokenCache } from "@clerk/clerk-expo/token-cache";',
+        'import { useAuth } from "@clerk/expo";',
+        'import { useSignIn } from "@clerk/expo/legacy";',
+      );
+
+      expect(await reports(filePath, source, "no-restricted-imports")).toEqual([
+        error(1, restricted("@clerk/clerk-expo", DEPRECATED_CLERK)),
+        error(2, restricted("@clerk/clerk-expo/token-cache", DEPRECATED_CLERK)),
+      ]);
+    },
+  );
+
+  it.each([
+    ["lib/x.ts", LIB_FRAMEWORK],
+    ["server/x.ts", SERVER_CLIENT_SDK],
+    ["app/(api)/y+api.ts", SERVER_CLIENT_SDK],
+  ])(
+    "EG8: no-restricted-imports: %s, whose override sets its own import rules, still reports @clerk/clerk-expo as deprecated, after its layer rule",
+    async (filePath, layer) => {
+      const source = code('import { useAuth } from "@clerk/clerk-expo";');
+
+      expect(await reports(filePath, source, "no-restricted-imports")).toEqual([
+        error(1, restricted("@clerk/clerk-expo", layer)),
+        error(1, restricted("@clerk/clerk-expo", DEPRECATED_CLERK)),
+      ]);
+    },
+  );
+
+  it.each([
+    "app/_layout.tsx",
+    "app/(auth)/x.tsx",
+    "app/(root)/x.tsx",
+    "components/X.tsx",
+    "hooks/useX.ts",
+    "services/x.ts",
+    "store/x.ts",
+    "lib/x.ts",
+    "server/x.ts",
+    "app/(api)/y+api.ts",
+    "__tests__/x.test.tsx",
+    "scripts/x.mjs",
+  ])(
+    "EG8: no-restricted-syntax: %s may not name @clerk/clerk-expo or a subpath of it in a require(), a jest.mock() or an import() either, which no-restricted-imports does not see; @clerk/expo is fine",
+    async (filePath) => {
+      const source = code(
+        'export const sdk = require("@clerk/clerk-expo");',
+        'jest.mock("@clerk/clerk-expo/token-cache", () => ({}));',
+        'export const later = () => import("@clerk/clerk-expo");',
+        'export const where = require.resolve("@clerk/clerk-expo");',
+        'export const expo = require("@clerk/expo");',
+        'jest.mock("@clerk/expo", () => ({}));',
+        'export const legacy = () => import("@clerk/expo/legacy");',
+        'export const lookalike = require("@clerk/clerk-expo-passkeys");',
+      );
+
+      expect(await reports(filePath, source, "no-restricted-syntax")).toEqual([
+        error(1, DEPRECATED_CLERK),
+        error(2, DEPRECATED_CLERK),
+        error(3, DEPRECATED_CLERK),
+        error(4, DEPRECATED_CLERK),
       ]);
     },
   );
@@ -366,5 +457,109 @@ describe("wall-clock time only via lib/zagreb-time.ts", () => {
     expect(
       await reports("__tests__/x.test.ts", source, "no-restricted-properties"),
     ).toEqual([]);
+  });
+});
+
+describe("eslint-config-expo 57 on this app", () => {
+  /** Each react-hooks report on `source` at `filePath`, as `{ rule, line, severity }`. */
+  async function hookReports(filePath: string, source: string) {
+    return (await lint(filePath, source))
+      .filter((m) => m.ruleId?.startsWith("react-hooks/"))
+      .map(({ ruleId, line, severity }) => ({ rule: ruleId, line, severity }));
+  }
+
+  it("the React Compiler-only react-hooks rules (refs, purity, immutability, set-state-in-effect) are off; rules-of-hooks stays an error and exhaustive-deps a warning", async () => {
+    const source = code(
+      'import { useEffect, useRef, useState } from "react";',
+      'import { Text } from "react-native";',
+      "",
+      "export function Ticker({ id }: { id: string }) {",
+      "  const renders = useRef(0);",
+      "  renders.current += 1;",
+      "  const [shownMs, setShownMs] = useState(0);",
+      "  useEffect(() => {",
+      "    setShownMs(0);",
+      "    start();",
+      "  }, [id]);",
+      "  const start = () => setShownMs(1);",
+      "  return <Text>{Date.now() + shownMs + renders.current}</Text>;",
+      "}",
+      "",
+      "export function Broken({ id, on }: { id: string; on: boolean }) {",
+      "  const [value, setValue] = useState(id);",
+      "  if (on) useRef(id);",
+      "  useEffect(() => setValue(id), []);",
+      "  return <Text>{value}</Text>;",
+      "}",
+    );
+
+    expect(await hookReports("components/X.tsx", source)).toEqual([
+      { rule: "react-hooks/rules-of-hooks", line: 18, severity: ERROR },
+      { rule: "react-hooks/exhaustive-deps", line: 19, severity: 1 },
+    ]);
+  });
+
+  it("those rules may stay off only while the React Compiler does: the resolved app config enables no compiler", () => {
+    const appJson = JSON.parse(read("app.json")).expo;
+    const context = {
+      projectRoot: REPO_ROOT,
+      staticConfigPath: path.join(REPO_ROOT, "app.json"),
+      packageJsonPath: path.join(REPO_ROOT, "package.json"),
+      config: appJson,
+    } as ConfigContext;
+
+    expect(appConfig(context).experiments).toEqual({ typedRoutes: true });
+  });
+
+  it("@typescript-eslint/no-require-imports is off under __tests__/**, where jest.mock factories need require(); app code still gets its warning", async () => {
+    const source = code(
+      'jest.mock("@/services/api", () => require("./mocks/api"));',
+      'export const api = require("@/services/api");',
+    );
+    const REQUIRE = "@typescript-eslint/no-require-imports";
+    const warning = (line: number) => ({
+      line,
+      message: "A `require()` style import is forbidden.",
+      severity: 1,
+    });
+
+    expect(await reports("__tests__/x.test.ts", source, REQUIRE)).toEqual([]);
+    expect(await reports("__tests__/X.test.tsx", source, REQUIRE)).toEqual([]);
+    expect(await reports("components/X.tsx", source, REQUIRE)).toEqual([
+      warning(1),
+      warning(2),
+    ]);
+  });
+
+  it("eslint . skips the generated, gitignored files (expo-env.d.ts, coverage, build output) and nothing the layer rules cover", async () => {
+    const ignored = async (files: string[]) => {
+      const flags = await Promise.all(
+        files.map((file) => eslint.isPathIgnored(path.join(REPO_ROOT, file))),
+      );
+      return files.filter((_, index) => flags[index]);
+    };
+    const generated = [
+      "expo-env.d.ts",
+      "coverage/lcov-report/sorter.js",
+      "dist/index.js",
+      "web-build/index.js",
+    ];
+    const covered = [
+      "lib/x.ts",
+      "server/x.ts",
+      "app/(api)/x+api.ts",
+      "app/(root)/x.tsx",
+      "app/_layout.tsx",
+      "components/X.tsx",
+      "hooks/useX.ts",
+      "services/x.ts",
+      "store/x.ts",
+      "scripts/x.mjs",
+      "__tests__/x.test.ts",
+      "nativewind-env.d.ts",
+    ];
+
+    expect(await ignored(generated)).toEqual(generated);
+    expect(await ignored(covered)).toEqual([]);
   });
 });

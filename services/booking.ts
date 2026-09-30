@@ -1,6 +1,7 @@
 /**
  * services/booking.ts — the booking API, as the app calls it.
- * Every call carries a fresh Clerk session token.
+ * Every call carries a fresh Clerk session token, read by fetchAPI, which
+ * waits for it for TOKEN_TIMEOUT_MS at most (P8, X9, P7).
  */
 
 import { fetchAPI } from "@/services/api";
@@ -28,7 +29,7 @@ export async function bookRide(
 ): Promise<BookingResponse> {
   return fetchAPI<BookingResponse>("/(api)/ride/book", {
     method: "POST",
-    token: await getToken(),
+    getToken,
     body: JSON.stringify({
       quote_token: request.quoteToken,
       driver_id: request.driverId,
@@ -56,7 +57,7 @@ export async function confirmRide(
     try {
       const { data } = await fetchAPI<{ data: Ride }>("/(api)/ride/confirm", {
         method: "POST",
-        token: await getToken(),
+        getToken,
         body: JSON.stringify({ ride_id: rideId }),
       });
       return data;
@@ -74,7 +75,7 @@ export async function cancelRide(
 ): Promise<Ride> {
   const { data } = await fetchAPI<{ data: Ride }>("/(api)/ride/cancel", {
     method: "POST",
-    token: await getToken(),
+    getToken,
     body: JSON.stringify({ ride_id: rideId }),
   });
   return data;

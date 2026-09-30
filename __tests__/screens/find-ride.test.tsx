@@ -1,8 +1,9 @@
 /**
  * The Find ride screen (WP4 Surfaces "When row", K4–K6, K10), on fixed Zagreb
- * clocks and the real stores and picker. The layout, the Places inputs and
- * react-native-modal are replaced by plain views, so what the rider sees on
- * this screen is what is under test.
+ * clocks and the real stores and picker. The layout and the Places inputs are
+ * replaced by plain views (the picker's AppModal is React Native's own Modal,
+ * whose jest mock renders it inline), so what the rider sees on this screen is
+ * what is under test.
  */
 import { Ionicons } from "@expo/vector-icons";
 import {
@@ -38,9 +39,6 @@ jest.mock("@/components/GoogleTextInput", () => {
     return <View />;
   };
 });
-jest.mock("react-native-modal", () =>
-  require("../helpers/mocks/react-native-modal"),
-);
 
 const NOW = Date.parse("2026-09-29T06:05:00.000Z"); // Tue 29 Sep, 08:05 CEST
 const slotAt = (iso: string) => Date.parse(iso);

@@ -40,12 +40,7 @@ export function trackingSpeedup(
 
 /** Where a ride is: its phase on the timeline (S4–S9). */
 export type RidePhase =
-  | "scheduled"
-  | "en_route"
-  | "arrived"
-  | "on_trip"
-  | "completed"
-  | "cancelled";
+  "scheduled" | "en_route" | "arrived" | "on_trip" | "completed" | "cancelled";
 
 /** When a ride's driver sets off and how long each leg takes (ADR-009). */
 export interface RideTimeline {

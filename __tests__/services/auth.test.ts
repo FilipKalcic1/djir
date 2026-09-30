@@ -1,11 +1,12 @@
 /**
  * services/auth — Clerk's token cache and the Google sign-in flow (R10).
- * SecureStore is an in-memory fake; expo-linking and Clerk's startOAuthFlow
- * are stubbed at the boundary.
+ * SecureStore is an in-memory fake; expo-linking and Clerk's startSSOFlow
+ * (useSSO, @clerk/expo 4.7) are stubbed at the boundary.
  */
 import * as Linking from "expo-linking";
 import * as SecureStore from "expo-secure-store";
 
+import { NETWORK_ERROR_MESSAGE } from "@/lib/utils";
 import { googleOAuth, tokenCache } from "@/services/auth";
 
 import { resetSecureStore, store } from "../helpers/mocks/expo-secure-store";
@@ -89,13 +90,17 @@ describe("tokenCache", () => {
 });
 
 describe("googleOAuth", () => {
-  it("R10: redirects back to Home", async () => {
-    const startOAuthFlow = flow({ createdSessionId: null });
+  it("R10: runs Clerk's Google SSO flow, redirecting back to Home through the running app's own URL", async () => {
+    const startSSOFlow = flow({ createdSessionId: null });
 
-    await googleOAuth(startOAuthFlow);
+    await googleOAuth(startSSOFlow);
 
     expect(Linking.createURL).toHaveBeenCalledWith("/(root)/(tabs)/home");
-    expect(startOAuthFlow).toHaveBeenCalledWith({ redirectUrl: HOME_URL });
+    expect(startSSOFlow).toHaveBeenCalledTimes(1);
+    expect(startSSOFlow).toHaveBeenCalledWith({
+      strategy: "oauth_google",
+      redirectUrl: HOME_URL,
+    });
   });
 
   it("R10: a created session is activated and the rider is signed in", async () => {
@@ -146,8 +151,24 @@ describe("googleOAuth", () => {
 
   it("R10 R20: a plain error is reported with its message", async () => {
     await expect(
-      googleOAuth(failingFlow(new Error("Network request failed"))),
-    ).resolves.toEqual({ status: "error", message: "Network request failed" });
+      googleOAuth(
+        failingFlow(new Error("Another web browser is already open.")),
+      ),
+    ).resolves.toEqual({
+      status: "error",
+      message: "Another web browser is already open.",
+    });
+  });
+
+  it("R10 R20: a connection that failed is reported as one plain line, not Clerk's endpoint URL", async () => {
+    const offline = new Error(
+      'ClerkJS: Network error at "https://clever-cat-12.clerk.accounts.dev/v1/client/sign_ins?__clerk_api_version=2026-05-12&_clerk_js_version=6.35.0&_is_native=1" - TypeError: Network request failed. Please try again.',
+    );
+
+    await expect(googleOAuth(failingFlow(offline))).resolves.toEqual({
+      status: "error",
+      message: NETWORK_ERROR_MESSAGE,
+    });
   });
 
   it("R10 R20: an error without a message falls back to a generic one", async () => {
@@ -157,7 +178,27 @@ describe("googleOAuth", () => {
     });
   });
 
-  it("R10: a failure to activate the session is an error, not a sign-in", async () => {
+  it("R10: a session whose activation fails once is activated on a second try, and the rider is signed in", async () => {
+    // On iOS and Android, @clerk/clerk-js 6's setActive first touches the
+    // session on Clerk's server, and a touch that fails (a 5xx, a 429, a
+    // dropped connection) now rejects it: 2.20 ignored that failure.
+    const setActive = jest
+      .fn<Promise<void>, [{ session: string }]>()
+      .mockRejectedValueOnce(new Error("Oops, an unexpected error occurred."))
+      .mockResolvedValueOnce(undefined);
+
+    const result = await googleOAuth(
+      flow({ createdSessionId: "sess_1", setActive }),
+    );
+
+    expect(setActive.mock.calls).toEqual([
+      [{ session: "sess_1" }],
+      [{ session: "sess_1" }],
+    ]);
+    expect(result).toEqual({ status: "signed-in" });
+  });
+
+  it("R10: a session that can't be activated on the second try either is an error, not a sign-in", async () => {
     const setActive = jest.fn(async () => {
       throw new Error("Session expired");
     });
@@ -165,5 +206,6 @@ describe("googleOAuth", () => {
     await expect(
       googleOAuth(flow({ createdSessionId: "sess_1", setActive })),
     ).resolves.toEqual({ status: "error", message: "Session expired" });
+    expect(setActive).toHaveBeenCalledTimes(2);
   });
 });

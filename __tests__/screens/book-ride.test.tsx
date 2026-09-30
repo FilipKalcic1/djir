@@ -48,12 +48,14 @@ import type { PaymentProps } from "@/components/Payment";
 const mockPayment = { real: false, props: null as PaymentProps | null };
 
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@stripe/stripe-react-native", () =>
   require("../helpers/mocks/stripe"),
 );
+// Links as Expo Go makes them (Payment's 3-D Secure return URL).
 jest.mock("expo-linking", () => ({
   addEventListener: jest.fn(() => ({ remove: jest.fn() })),
+  createURL: jest.fn((path: string) => `exp://192.168.1.20:8081/--/${path}`),
 }));
 jest.mock("@/services/booking", () => ({
   ...jest.requireActual("@/services/booking"),
@@ -86,9 +88,6 @@ jest.mock("@/components/Payment", () => {
 });
 jest.mock("@/components/RideLayout", () =>
   require("../helpers/mocks/ride-layout"),
-);
-jest.mock("react-native-modal", () =>
-  require("../helpers/mocks/react-native-modal"),
 );
 
 const mockBookRide = jest.mocked(bookRide);
@@ -357,11 +356,18 @@ describe("book-ride — with the real Payment", () => {
   const confirmButton = () => screen.getByTestId("payment-confirm");
 
   const realFetch = global.fetch;
+  // The real Payment opens a sheet only with a Stripe publishable key (EG5).
+  const savedStripeKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
   beforeEach(() => {
     mockPayment.real = true;
+    process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY =
+      "pk_test_51NdjirPublishable";
   });
   afterEach(() => {
     global.fetch = realFetch;
+    if (savedStripeKey === undefined)
+      delete process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+    else process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY = savedStripeKey;
   });
 
   it("P3c: a refresh that fails keeps Book Ride — driver, fare, 'Couldn't refresh the price…' and the button — never 'Choose a driver first.'", () => {
@@ -487,7 +493,9 @@ describe("book-ride — with the real Payment", () => {
       SLOT,
       null,
     ]);
-    expect(router.navigate).toHaveBeenCalledWith("/(root)/find-ride");
+    // dismissTo pops back to Find ride; navigate would push a second one.
+    expect(router.dismissTo).toHaveBeenCalledWith("/(root)/find-ride");
+    expect(router.navigate).not.toHaveBeenCalled();
     expect(useBookingStore.getState()).toMatchObject({
       scheduledAt: null,
       slotNotice: SLOT_EXPIRED_NOTICE,
@@ -511,8 +519,9 @@ describe("book-ride — with the real Payment", () => {
     fireEvent.press(confirmButton());
 
     await waitFor(() =>
-      expect(router.navigate).toHaveBeenCalledWith("/(root)/find-ride"),
+      expect(router.dismissTo).toHaveBeenCalledWith("/(root)/find-ride"),
     );
+    expect(router.navigate).not.toHaveBeenCalled();
     expect(useBookingStore.getState().slotNotice).toBe(SLOT_EXPIRED_NOTICE);
     expect(alert).not.toHaveBeenCalled();
     expect(screen.queryByText("Choose a driver first.")).toBeNull();

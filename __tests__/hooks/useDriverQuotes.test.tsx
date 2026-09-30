@@ -19,7 +19,7 @@ import { deferred, settle } from "../helpers/async";
 import { fetchResponse } from "../helpers/fetch";
 import { resetClerk } from "../helpers/mocks/clerk";
 
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@/services/quotes", () => ({
   ...jest.requireActual("@/services/quotes"),
   fetchQuote: jest.fn(),

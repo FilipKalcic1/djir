@@ -7,6 +7,7 @@ import {
   apiErrorCode,
   fetchAPI,
   TIMEOUT_MESSAGE,
+  TOKEN_TIMEOUT_MS,
 } from "@/services/api";
 
 const fetchMock = jest.fn<Promise<Response>, [string, RequestInit]>();
@@ -243,6 +244,64 @@ describe("fetchAPI — timeoutMs (a load that never answers)", () => {
     }).catch((e: Error) => e);
 
     expect(error.name).toBe("AbortError");
+  });
+});
+
+describe("fetchAPI — getToken, Clerk's session token read as the request starts", () => {
+  beforeEach(() => jest.useFakeTimers());
+  afterEach(() => jest.useRealTimers());
+
+  it.each([
+    ["a token", "jwt_abc", { Authorization: "Bearer jwt_abc" }],
+    ["null (signed out)", null, {}],
+  ])(
+    "R07: getToken reading %s sends the same headers as that token would",
+    async (_, token, headers) => {
+      reply(200, "{}");
+      const getToken = jest.fn(async () => token);
+
+      await fetchAPI("/(api)/rides", { getToken });
+
+      expect(getToken).toHaveBeenCalledTimes(1);
+      expect(sentInit()).toEqual({ headers });
+      expect(jest.getTimerCount()).toBe(0);
+    },
+  );
+
+  it("R07: a getToken that fails fails the request with its error, and nothing is sent", async () => {
+    const expired = new Error("Session expired");
+
+    await expect(
+      fetchAPI("/(api)/ride/cancel", {
+        method: "POST",
+        getToken: async () => {
+          throw expired;
+        },
+      }),
+    ).rejects.toBe(expired);
+
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
+  });
+
+  it("R07: without timeoutMs, a getToken with no answer still fails the request after TOKEN_TIMEOUT_MS with 'No answer from the server…', and nothing is sent", async () => {
+    // Offline, @clerk/clerk-js 6 retries a session token for about 2.7
+    // minutes before it gives up; within a test it never answers at all.
+    let outcome: unknown = "pending";
+    fetchAPI("/(api)/ride/book", {
+      method: "POST",
+      body: "{}",
+      getToken: () => new Promise<string>(() => {}),
+    }).catch((error: unknown) => (outcome = error));
+
+    await jest.advanceTimersByTimeAsync(TOKEN_TIMEOUT_MS - 1);
+    expect(outcome).toBe("pending");
+    await jest.advanceTimersByTimeAsync(1);
+
+    expect(outcome).toEqual(new Error(TIMEOUT_MESSAGE));
+    expect(TOKEN_TIMEOUT_MS).toBe(10_000);
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(jest.getTimerCount()).toBe(0);
   });
 });
 

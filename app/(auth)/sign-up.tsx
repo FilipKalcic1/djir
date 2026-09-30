@@ -1,8 +1,7 @@
-import { useSignUp } from "@clerk/clerk-expo";
+import { useSignUp } from "@clerk/expo/legacy";
 import { Link, router } from "expo-router";
 import { useState } from "react";
 import { Alert, Image, ScrollView, Text, View } from "react-native";
-import { ReactNativeModal } from "react-native-modal";
 
 import CustomButton from "@/components/CustomButton";
 import InputField from "@/components/InputField";
@@ -10,8 +9,16 @@ import OAuth from "@/components/OAuth";
 import VerificationModal from "@/components/VerificationModal";
 import { icons, images } from "@/constants";
 import { clerkErrorMessage, signUpParams } from "@/lib/utils";
+import { activateSession } from "@/services/auth";
 
 type Step = "form" | "verifying" | "done";
+
+/**
+ * The code was accepted, but the new account's session could not be made
+ * active (R15): Verify Email now retries only that.
+ */
+const ACCOUNT_READY =
+  "Your account is ready, but we couldn't sign you in. Check your connection and tap Verify Email again.";
 
 const SignUp = () => {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -20,6 +27,12 @@ const SignUp = () => {
   const [code, setCode] = useState("");
   const [codeError, setCodeError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // The session of an account whose code was accepted, but which could not
+  // be made active. Clerk holds it for this phone and would refuse the spent
+  // code, and a second sign-in too, so Verify retries only the activation.
+  const [unactivated, setUnactivated] = useState<{
+    session: string | null;
+  } | null>(null);
 
   const onSignUpPress = async () => {
     if (!isLoaded) return;
@@ -44,15 +57,27 @@ const SignUp = () => {
     if (!isLoaded) return;
     setBusy(true);
     try {
-      const result = await signUp.attemptEmailAddressVerification({
-        code: code.trim(),
-      });
-      if (result.status === "complete") {
-        await setActive({ session: result.createdSessionId });
-        setStep("done");
+      let session: string | null;
+      if (unactivated) {
+        session = unactivated.session;
       } else {
-        setCodeError("Verification failed. Please try again.");
+        const result = await signUp.attemptEmailAddressVerification({
+          code: code.trim(),
+        });
+        if (result.status !== "complete") {
+          setCodeError("Verification failed. Please try again.");
+          return;
+        }
+        session = result.createdSessionId;
       }
+      try {
+        await activateSession(setActive, session);
+      } catch {
+        setUnactivated({ session });
+        setCodeError(ACCOUNT_READY);
+        return;
+      }
+      setStep("done");
     } catch (err) {
       // Keep the modal open with the reason, so the rider can retry (R15).
       setCodeError(
@@ -108,6 +133,8 @@ const SignUp = () => {
           <OAuth />
           <Link
             href="/sign-in"
+            // expo-router 57's Link pushes: swap screens instead of stacking them.
+            dismissTo
             className="text-lg text-center text-general-200 mt-10"
           >
             Already have an account?{" "}
@@ -116,34 +143,16 @@ const SignUp = () => {
         </View>
 
         <VerificationModal
-          visible={step === "verifying"}
+          visible={step !== "form"}
+          verified={step === "done"}
           email={form.email.trim()}
           code={code}
           error={codeError}
           verifying={busy}
           onChangeCode={setCode}
           onVerify={onPressVerify}
+          onBrowseHome={() => router.replace("/(root)/(tabs)/home")}
         />
-
-        <ReactNativeModal isVisible={step === "done"}>
-          <View className="bg-white px-7 py-9 rounded-2xl min-h-[300px]">
-            <Image
-              source={images.check}
-              className="w-[110px] h-[110px] mx-auto my-5"
-            />
-            <Text className="text-3xl font-JakartaBold text-center">
-              Verified
-            </Text>
-            <Text className="text-base text-gray-400 font-Jakarta text-center mt-2">
-              You have successfully verified your account.
-            </Text>
-            <CustomButton
-              title="Browse Home"
-              onPress={() => router.replace("/(root)/(tabs)/home")}
-              className="mt-5"
-            />
-          </View>
-        </ReactNativeModal>
       </View>
     </ScrollView>
   );

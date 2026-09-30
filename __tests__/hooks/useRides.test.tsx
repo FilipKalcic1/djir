@@ -10,7 +10,7 @@ import { fetchResponse } from "../helpers/fetch";
 import { auth, resetClerk } from "../helpers/mocks/clerk";
 import { makeRide, MIN } from "../helpers/rides";
 
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@/services/reminders", () => ({ syncReminders: jest.fn() }));
 
 // Like expo-router's hook: runs when the screen gains focus (on mount, and

@@ -7,11 +7,6 @@
     "icon": "./assets/images/icon.png",
     "scheme": "djir",
     "userInterfaceStyle": "automatic",
-    "splash": {
-      "image": "./assets/images/splash.png",
-      "resizeMode": "contain",
-      "backgroundColor": "#2F80ED"
-    },
     "ios": {
       "supportsTablet": true
     },
@@ -31,6 +26,15 @@
         "expo-router",
         {
           "origin": "https://djir.app/"
+        }
+      ],
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash.png",
+          "resizeMode": "contain",
+          "backgroundColor": "#2F80ED",
+          "imageWidth": 200
         }
       ]
     ],

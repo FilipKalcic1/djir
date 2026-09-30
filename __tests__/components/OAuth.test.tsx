@@ -1,18 +1,23 @@
 /**
- * "Log In with Google": Clerk's OAuth flow is the boundary; the real
- * googleOAuth service decides signed-in / cancelled / error (R10).
+ * "Log In with Google": Clerk's SSO flow (`useSSO`, @clerk/expo 4.7, which
+ * deprecates `useOAuth`) is the boundary; the real googleOAuth service
+ * decides signed-in / cancelled / error (R10).
  */
+import { useSSO } from "@clerk/expo";
 import { act, fireEvent, render, screen } from "@testing-library/react-native";
 import * as Linking from "expo-linking";
 import { Alert } from "react-native";
 
 import OAuth from "@/components/OAuth";
 
-import { useOAuth } from "../helpers/mocks/clerk";
 import { resetRouter, router } from "../helpers/mocks/expo-router";
 import { resetSecureStore } from "../helpers/mocks/expo-secure-store";
 
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+// The shared Clerk mock, plus @clerk/expo's useSSO.
+jest.mock("@clerk/expo", () => ({
+  ...require("../helpers/mocks/clerk"),
+  useSSO: jest.fn(),
+}));
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
 jest.mock("expo-secure-store", () =>
   require("../helpers/mocks/expo-secure-store"),
@@ -23,13 +28,13 @@ jest.mock("expo-linking", () => ({
 }));
 
 type FlowResult = {
-  createdSessionId?: string | null;
+  createdSessionId: string | null;
   setActive?: (params: { session: string }) => Promise<void>;
 };
 
-const startOAuthFlow = jest.fn<
+const startSSOFlow = jest.fn<
   Promise<FlowResult>,
-  [{ redirectUrl: string }]
+  [{ strategy: string; redirectUrl: string }]
 >();
 const setActive = jest.fn(async (_: { session: string }) => {});
 
@@ -42,9 +47,12 @@ async function pressGoogle() {
 beforeEach(() => {
   resetRouter();
   resetSecureStore();
-  startOAuthFlow.mockReset();
+  startSSOFlow.mockReset();
   setActive.mockClear();
-  useOAuth.mockReset().mockReturnValue({ startOAuthFlow });
+  jest
+    .mocked(useSSO)
+    .mockReset()
+    .mockReturnValue({ startSSOFlow } as unknown as ReturnType<typeof useSSO>);
   jest.spyOn(Alert, "alert").mockImplementation(() => {});
 });
 
@@ -53,25 +61,27 @@ afterEach(() => {
 });
 
 describe("OAuth", () => {
-  it("renders an 'Or' divider and the 'Log In with Google' button for the Google strategy", () => {
+  it("renders an 'Or' divider and the 'Log In with Google' button, and starts no flow by itself", () => {
     render(<OAuth />);
 
     expect(screen.getByText("Or")).toBeOnTheScreen();
     expect(
       screen.getByRole("button", { name: "Log In with Google" }),
     ).toBeOnTheScreen();
-    expect(useOAuth).toHaveBeenCalledWith({ strategy: "oauth_google" });
+    expect(useSSO).toHaveBeenCalled();
+    expect(startSSOFlow).not.toHaveBeenCalled();
   });
 
-  it("R10: a successful sign-in activates the session and lands on Home", async () => {
-    startOAuthFlow.mockResolvedValue({ createdSessionId: "sess_1", setActive });
+  it("R10: a successful sign-in runs Clerk's Google SSO flow, activates the session and lands on Home", async () => {
+    startSSOFlow.mockResolvedValue({ createdSessionId: "sess_1", setActive });
     render(<OAuth />);
 
     await pressGoogle();
 
     expect(Linking.createURL).toHaveBeenCalledWith("/(root)/(tabs)/home");
-    expect(startOAuthFlow).toHaveBeenCalledTimes(1);
-    expect(startOAuthFlow).toHaveBeenCalledWith({
+    expect(startSSOFlow).toHaveBeenCalledTimes(1);
+    expect(startSSOFlow).toHaveBeenCalledWith({
+      strategy: "oauth_google",
       redirectUrl: "djir:///(root)/(tabs)/home",
     });
     expect(setActive).toHaveBeenCalledWith({ session: "sess_1" });
@@ -82,7 +92,7 @@ describe("OAuth", () => {
   });
 
   it("R10: a cancelled flow (no session) stays put without an alert", async () => {
-    startOAuthFlow.mockResolvedValue({ createdSessionId: null, setActive });
+    startSSOFlow.mockResolvedValue({ createdSessionId: null, setActive });
     render(<OAuth />);
 
     await pressGoogle();
@@ -94,7 +104,7 @@ describe("OAuth", () => {
   });
 
   it("R10: a Clerk error is explained in an alert, with no navigation", async () => {
-    startOAuthFlow.mockRejectedValue({
+    startSSOFlow.mockRejectedValue({
       errors: [{ longMessage: "This account has been locked." }],
     });
     render(<OAuth />);
@@ -110,7 +120,7 @@ describe("OAuth", () => {
   });
 
   it("R10: an error without a message falls back to a generic one", async () => {
-    startOAuthFlow.mockRejectedValue(new Error(""));
+    startSSOFlow.mockRejectedValue(new Error(""));
     render(<OAuth />);
 
     await pressGoogle();
@@ -122,13 +132,16 @@ describe("OAuth", () => {
     expect(router.replace).not.toHaveBeenCalled();
   });
 
-  it("R10: if activating the session fails, the rider is told and stays put", async () => {
-    setActive.mockRejectedValueOnce(new Error("Session expired"));
-    startOAuthFlow.mockResolvedValue({ createdSessionId: "sess_1", setActive });
+  it("R10: if activating the session fails on its second try too, the rider is told and stays put", async () => {
+    setActive
+      .mockRejectedValueOnce(new Error("Session expired"))
+      .mockRejectedValueOnce(new Error("Session expired"));
+    startSSOFlow.mockResolvedValue({ createdSessionId: "sess_1", setActive });
     render(<OAuth />);
 
     await pressGoogle();
 
+    expect(setActive).toHaveBeenCalledTimes(2);
     expect(Alert.alert).toHaveBeenCalledWith(
       "Google sign-in failed",
       "Session expired",

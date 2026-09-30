@@ -14,6 +14,8 @@ export const router = {
   navigate: jest.fn(),
   back: jest.fn(),
   dismissAll: jest.fn(),
+  dismissTo: jest.fn(),
+  canGoBack: jest.fn(() => false),
 };
 
 export const useLocalSearchParams = jest.fn(() => ({}));
@@ -62,6 +64,7 @@ export const Stack = Object.assign(
 
 export function resetRouter() {
   Object.values(router).forEach((fn) => fn.mockReset());
+  router.canGoBack.mockReturnValue(false);
   useLocalSearchParams.mockReset().mockReturnValue({});
   usePathname.mockReset().mockReturnValue("/");
   useGlobalSearchParams.mockReset().mockReturnValue({});

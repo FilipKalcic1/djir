@@ -6,8 +6,9 @@
 
 **A ride-hailing app for Zagreb: Expo and React Native on a serverless Postgres backend, with Stripe payments and ML-priced fares.**
 
-[![Expo](https://img.shields.io/badge/Expo-SDK%2051-000020?logo=expo&logoColor=white)](https://expo.dev/)
-[![React Native](https://img.shields.io/badge/React%20Native-0.74-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
+[![Expo](https://img.shields.io/badge/Expo-SDK%2057-000020?logo=expo&logoColor=white)](https://expo.dev/)
+[![React Native](https://img.shields.io/badge/React%20Native-0.86-61DAFB?logo=react&logoColor=black)](https://reactnative.dev/)
+[![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)](https://react.dev/)
 [![TypeScript](https://img.shields.io/badge/TypeScript-strict-3178C6?logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
 [![Stripe](https://img.shields.io/badge/Stripe-Payment%20Sheet-635BFF?logo=stripe&logoColor=white)](https://stripe.com/)
 [![Tests](https://img.shields.io/badge/tests-Jest%20%2B%20PGlite%20%2B%20pytest-2EA44F?logo=jest&logoColor=white)](#-built-to-be-trusted)
@@ -121,7 +122,7 @@ stateDiagram-v2
 
 - **You pay exactly the price you saw.** The server signs each quote; booking charges the signed amount and ignores any amount or user id in the request. <!-- claim:B5 -->
 - **Every succeeded payment has exactly one visible ride.** A reserve-first booking flow and a reconcile step keep that true through 11 crash, race and backlog scenarios, tested against a real Postgres (PGlite). <!-- claim:B6 -->
-- **Authenticated API.** Clerk session tokens are checked on the server without a network call; only the driver list and quotes are public.
+- **Authenticated API.** Clerk session tokens are checked on the server without a network call; only the driver list, quotes and a setup check (it names missing settings, never their values) are public.
 - **One clock.** Hours and weekdays come from a dependency-free Zagreb clock that matches the tz database for every hour from 2020 to 2035. <!-- claim:B2 -->
 - **One price formula, two languages.** The TypeScript fallback prices to the cent like the Python library on 442 golden trips (30 of them straddling the DST switches, 12 with an ETA on a rounding tie) plus 30 rounding cases, all exported from Python. <!-- claim:B1 -->
 - **Tests that bite.** Each critical v1.0 bug, put back into the code by `npm run mutants`, makes its tests fail. <!-- claim:B11 -->
@@ -134,10 +135,10 @@ The full story is in [`docs/REVIEW.md`](docs/REVIEW.md) (what was broken), [`doc
 
 | Layer | Technology |
 | --- | --- |
-| App | React Native 0.74 · Expo SDK 51 · Expo Router 3 (screens **and** API routes) · TypeScript |
-| UI | NativeWind (Tailwind) · Plus Jakarta Sans · `@gorhom/bottom-sheet` · `react-native-maps` |
+| App | React Native 0.86 (New Architecture) · React 19 · Expo SDK 57 · Expo Router 57 (screens **and** API routes) · TypeScript |
+| UI | NativeWind 2 (Tailwind) · Plus Jakarta Sans · `@gorhom/bottom-sheet` 5 · `react-native-maps` · Reanimated 4 |
 | State | Zustand |
-| Auth | Clerk (email + password with email verification, Google OAuth), verified server-side with WebCrypto |
+| Auth | Clerk via `@clerk/expo` (email + password with email verification, Google sign-in), verified server-side with WebCrypto |
 | Payments | Stripe Payment Sheet (deferred intent) · `stripe` on the server |
 | Database | Neon serverless Postgres |
 | Reminders | `expo-notifications` (local) |
@@ -162,11 +163,11 @@ __tests__/    lib · server · api · db · services · store · components · h
 
 ## 🚀 Getting started
 
-**Prerequisites:** Node.js 20 (see `.nvmrc`), and Expo Go on a device or an iOS or Android simulator. The maps and Stripe (including 3-D Secure returns) work best in a native build: `npx expo run:ios` or `npx expo run:android` (Android maps then need `GOOGLE_MAPS_ANDROID_API_KEY`).
+**Prerequisites:** Node.js 24 (see `.nvmrc`; 22.13 or newer also works), and Expo Go (SDK 57) on a device or an iOS or Android simulator. The maps and Stripe (including 3-D Secure returns) work best in a native build: `npx expo run:ios` or `npx expo run:android` (Android maps then need `GOOGLE_MAPS_ANDROID_API_KEY`).
 
 ```bash
-git clone https://github.com/FilipKalcic1/djir.git
-cd djir
+git clone https://github.com/FilipKalcic1/djir-fullstack.git
+cd djir-fullstack
 npm install
 cp .env.example .env.local      # then fill it in: each variable is explained there
 ```
@@ -179,7 +180,7 @@ cp .env.example .env.local      # then fill it in: each variable is explained th
 | `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` · `STRIPE_SECRET_KEY` | [Stripe](https://dashboard.stripe.com/apikeys) (test keys) |
 | `EXPO_PUBLIC_PLACES_API_KEY` · `EXPO_PUBLIC_DIRECTIONS_API_KEY` · `GOOGLE_MAPS_ANDROID_API_KEY` | [Google Cloud](https://console.cloud.google.com/) |
 | `EXPO_PUBLIC_GEOAPIFY_API_KEY` | [Geoapify](https://www.geoapify.com/) (history thumbnails; optional) |
-| `EXPO_PUBLIC_API_ORIGIN` | where the API routes are served: `http://localhost:8081/` in development, your deployed origin in production. **Required for iOS and Android** (left empty, their API calls fail closed); the web build can leave it empty |
+| `EXPO_PUBLIC_API_ORIGIN` | where the API routes are served. Leave it empty for `npx expo start` and Expo Go: the app then calls the dev server that served it. **Required for release iOS and Android builds**, set to your deployed origin (left empty, their API calls fail closed); the web build can leave it empty |
 | `ML_ENDPOINT_URL` · `EXPO_PUBLIC_TRACKING_SPEEDUP` | optional: the [model endpoint](ml-platform/) (unset, the fallback formula prices), a demo speed-up for tracking |
 
 **Database.** Run [`schema.sql`](schema.sql) on a new database, or [`db/migrations/001_v1_1.sql`](db/migrations/001_v1_1.sql) on a v1.0 one (`psql "$DATABASE_URL" -f …` or the Neon SQL editor).
@@ -187,6 +188,24 @@ cp .env.example .env.local      # then fill it in: each variable is explained th
 ```bash
 npx expo start                  # then i / a, or scan the QR code with Expo Go
 ```
+
+### 📱 Run it on your iPhone
+
+1. On the PC: `npm install`, then `npx expo start`, and leave it running.
+2. On the iPhone: install **Expo Go** from the App Store (this project needs SDK 57), then scan the QR code in the terminal with the Camera app, or from inside Expo Go.
+3. The phone and the PC must be on the same Wi-Fi. If the app cannot load (a guest network, a VPN, Windows Firewall blocking Node.js: allow it on private networks), run `npx expo start --tunnel` instead.
+
+With `.env.local` still empty, the app opens on **Setup needed** instead of crashing. It lists each app key as Set, Missing or Not a valid key, with what it unlocks and where to get it, and asks the dev server which server settings are still missing (**Check again** asks once more). After adding keys, stop the server (Ctrl+C), start it again with `npx expo start -c` and reload the app (shake the phone → Reload).
+
+| Add to `.env.local` | What it unlocks |
+| --- | --- |
+| `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` (`pk_test_…`) | the app itself: sign-up and sign-in. It is the only key the app needs to open |
+| `DATABASE_URL` (Neon), then run [`schema.sql`](schema.sql) on that database once | the drivers on the confirm list and, with `CLERK_JWT_KEY`, your ride history |
+| `QUOTE_SIGNING_SECRET` (32+ characters) + `CLERK_JWT_KEY` | prices and booking |
+| `EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY` + `STRIPE_SECRET_KEY` (test keys) | paying for a ride (test card 4242 4242 4242 4242); until then Book Ride names the key to add |
+| `EXPO_PUBLIC_PLACES_API_KEY` | optional: address search. Without it, From and To offer a list of popular Zagreb places |
+
+In Expo Go the map is Apple Maps (no key needed), `EXPO_PUBLIC_API_ORIGIN` stays empty, and ride reminders arrive as Expo Go notifications.
 
 ## 📜 Scripts
 

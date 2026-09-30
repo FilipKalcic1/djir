@@ -48,7 +48,7 @@ describe("useNow", () => {
 
   it("applies a changed offset immediately, without waiting for the next tick", () => {
     const { result, rerender } = renderHook(
-      ({ offsetMs }) => useNow(30_000, offsetMs),
+      ({ offsetMs }: { offsetMs: number }) => useNow(30_000, offsetMs),
       { initialProps: { offsetMs: 0 } },
     );
     act(() => jest.advanceTimersByTime(10_000));
@@ -62,7 +62,7 @@ describe("useNow", () => {
 
   it("B1a B1d: a new restartKey (the screen back in focus) reads the clock at once and restarts the tick from there", () => {
     const { result, rerender } = renderHook(
-      ({ focus }) => useNow(30_000, 0, focus),
+      ({ focus }: { focus: number }) => useNow(30_000, 0, focus),
       { initialProps: { focus: 0 } },
     );
     act(() => jest.advanceTimersByTime(10_000));

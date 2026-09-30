@@ -1,6 +1,7 @@
 import { View, Image } from "react-native";
 import { GooglePlacesAutocomplete } from "react-native-google-places-autocomplete";
 
+import PopularPlaces from "@/components/PopularPlaces";
 import { icons } from "@/constants";
 import { GoogleInputProps } from "@/types/type";
 
@@ -8,8 +9,10 @@ import { GoogleInputProps } from "@/types/type";
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const { colors } = require("../tailwind.config").theme.extend;
 
-const googlePlacesApiKey = process.env.EXPO_PUBLIC_PLACES_API_KEY;
-
+/**
+ * The From/To address search (Google Places). Without a Places key the search
+ * cannot run, so the rider picks a popular Zagreb place instead (W11).
+ */
 const GoogleTextInput = ({
   icon,
   initialLocation,
@@ -17,12 +20,28 @@ const GoogleTextInput = ({
   textInputBackgroundColor,
   handlePress,
 }: GoogleInputProps) => {
+  const googlePlacesApiKey = process.env.EXPO_PUBLIC_PLACES_API_KEY;
+  if (!googlePlacesApiKey) {
+    return (
+      <PopularPlaces
+        icon={icon}
+        initialLocation={initialLocation}
+        containerStyle={containerStyle}
+        handlePress={handlePress}
+      />
+    );
+  }
+
   return (
     <View
       className={`flex flex-row items-center justify-center relative z-50 rounded-xl ${containerStyle}`}
     >
       <GooglePlacesAutocomplete
         fetchDetails={true}
+        // The suggestions sit in a scroll view already (Find ride's sheet):
+        // a second vertical scroller there is a nested-list error in React
+        // Native 0.86, and five suggestions need no scrolling of their own.
+        disableScroll
         placeholder="Search"
         debounce={200}
         styles={{
@@ -57,9 +76,11 @@ const GoogleTextInput = ({
           },
         }}
         onPress={(data, details = null) => {
+          // No details (the lookup failed): nothing to book a trip with.
+          if (!details) return;
           handlePress({
-            latitude: details?.geometry.location.lat!,
-            longitude: details?.geometry.location.lng!,
+            latitude: details.geometry.location.lat,
+            longitude: details.geometry.location.lng,
             address: data.description,
           });
         }}

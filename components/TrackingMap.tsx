@@ -92,9 +92,9 @@ const TrackingMap = ({
         frame(false); // the first frame, as soon as the map has its size
       }}
       provider={PROVIDER_DEFAULT}
-      className="w-full h-full"
+      style={{ width: "100%", height: "100%" }}
       mapType="mutedStandard"
-      showsPointsOfInterest={false}
+      showsPointsOfInterests={false}
       showsUserLocation={false}
       userInterfaceStyle="light"
       initialRegion={regionFor([scene.pin, ride.driverStart], { padding: 1.8 })}

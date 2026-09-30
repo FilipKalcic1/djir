@@ -1,24 +1,23 @@
 /**
  * The "Schedule a ride" picker (WP4 Rules K1–K2, K5/K6 notices, K10 sessions,
- * Surfaces, R74), on fixed Zagreb clocks. react-native-modal is replaced by a plain container that
- * renders its children while visible and exposes the backdrop and the Android
- * back button, so the picker's own behaviour is what is under test.
+ * Surfaces, R74), on fixed Zagreb clocks. The picker sits in AppModal (React
+ * Native's own Modal), whose jest mock renders its children while visible; the
+ * backdrop is AppModal's `modal-backdrop`, and Android's back button is the
+ * Modal's own onRequestClose.
  */
 import {
+  act,
   fireEvent,
   render,
   screen,
   within,
 } from "@testing-library/react-native";
+import { Modal } from "react-native";
 import tailwindColors from "tailwindcss/colors";
 
 import ScheduleModal from "@/components/ScheduleModal";
 
 import { colors } from "../helpers/tokens";
-
-jest.mock("react-native-modal", () =>
-  require("../helpers/mocks/react-native-modal"),
-);
 
 const SUMMER_8AM = Date.parse("2026-09-29T06:00:00.000Z"); // Tue 29 Sep, 08:00 CEST
 const WINTER_8AM = Date.parse("2026-12-01T07:00:00.000Z"); // Tue 1 Dec, 08:00 CET
@@ -507,7 +506,8 @@ describe("ScheduleModal — closing", () => {
   it("the Android back button closes", () => {
     const { onClose } = renderModal();
 
-    fireEvent.press(screen.getByTestId("modal-back-button"));
+    // The native Modal's own handler: what Android's back button calls.
+    act(() => screen.UNSAFE_getByType(Modal).props.onRequestClose());
 
     expect(onClose).toHaveBeenCalledTimes(1);
   });

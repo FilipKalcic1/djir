@@ -1,6 +1,9 @@
 /**
  * The sign-up screen against a fake Clerk: the name reaches Clerk (R21), and a
  * wrong email code keeps the verification modal open with the reason (R15).
+ * The code step and "Verified" are one React Native Modal (AppModal). The fake
+ * stands in for @clerk/expo/legacy, which keeps Clerk's Core 2 useSignUp
+ * (EG8); @clerk/expo's own useSignUp is Core 3's, a different API.
  */
 import {
   act,
@@ -9,7 +12,7 @@ import {
   screen,
   within,
 } from "@testing-library/react-native";
-import { Alert } from "react-native";
+import { Alert, Modal } from "react-native";
 
 import SignUp from "@/app/(auth)/sign-up";
 
@@ -26,17 +29,22 @@ const mockClerk = {
   setActive: jest.fn(),
 };
 
-jest.mock("@clerk/clerk-expo", () => ({
+jest.mock("@clerk/expo/legacy", () => ({
   useSignUp: () => mockClerk,
-  useOAuth: () => ({ startOAuthFlow: jest.fn() }),
+}));
+// Google sign-in has its own test (components/OAuth).
+jest.mock("@/components/OAuth", () => ({
+  __esModule: true,
+  default: () => null,
 }));
 jest.mock("expo-router", () => {
   const React = require("react");
   const { Text } = require("react-native");
   return {
     ...require("../helpers/mocks/expo-router"),
-    Link: ({ children }: { children: React.ReactNode }) =>
-      React.createElement(Text, null, children),
+    // A Text that keeps the Link's props (href, dismissTo, …).
+    Link: ({ children, ...props }: { children: React.ReactNode }) =>
+      React.createElement(Text, { testID: "link", ...props }, children),
   };
 });
 jest.mock("expo-secure-store", () =>
@@ -57,20 +65,12 @@ async function press(name: string) {
   });
 }
 
-/** Lets the modals finish animating in or out. */
-async function finishAnimations() {
-  await act(async () => {
-    jest.advanceTimersByTime(1000);
-  });
-}
-
-/** Types a code and submits it; a modal that is going to close has closed. */
+/** Types a code and submits it. */
 async function enterCode(code: string) {
   fireEvent.changeText(screen.getByPlaceholderText("12345"), code);
   await act(async () => {
     fireEvent.press(screen.getByTestId("verification-submit"));
   });
-  await finishAnimations();
 }
 
 /** Fills the form and submits it, reaching the verification step. */
@@ -78,12 +78,9 @@ async function signUpAs(name = "Ana Horvat") {
   render(<SignUp />);
   fillForm(name, "ana@example.com", "correct horse battery");
   await press("Sign Up");
-  await finishAnimations();
 }
 
-// The modals animate on timers; fake ones keep those frames inside the test.
 beforeEach(() => {
-  jest.useFakeTimers();
   resetRouter();
   resetSecureStore();
   mockClerk.isLoaded = true;
@@ -98,11 +95,10 @@ beforeEach(() => {
 
 afterEach(() => {
   jest.restoreAllMocks();
-  jest.useRealTimers();
 });
 
 describe("sign-up — creating the account (R21)", () => {
-  it("R21: the entered name goes to Clerk as unsafeMetadata, with the trimmed email", async () => {
+  it("R21 EG8: the entered name goes to Clerk as unsafeMetadata, with the trimmed email", async () => {
     render(<SignUp />);
     fillForm("  Ana Horvat ", " ana@example.com ", "correct horse battery");
 
@@ -163,6 +159,15 @@ describe("sign-up — creating the account (R21)", () => {
     expect(screen.getByRole("button", { name: "Sign Up" })).toBeEnabled();
   });
 
+  it("the Log In link swaps to sign-in rather than stacking it (expo-router 57's Link pushes by default)", () => {
+    render(<SignUp />);
+
+    const link = screen.getByTestId("link");
+    expect(link).toHaveTextContent("Already have an account? Log In");
+    expect(link).toHaveProp("href", "/sign-in");
+    expect(link).toHaveProp("dismissTo", true);
+  });
+
   it("does nothing until Clerk has loaded", async () => {
     mockClerk.isLoaded = false;
     render(<SignUp />);
@@ -211,7 +216,7 @@ describe("sign-up — verifying the email (R15)", () => {
     expect(mockClerk.setActive).not.toHaveBeenCalled();
   });
 
-  it("R15: after a wrong code the rider can retry, and the right one signs them in", async () => {
+  it("R15 EG8: after a wrong code the rider can retry, and the right one signs them in", async () => {
     mockClerk.signUp.attemptEmailAddressVerification
       .mockRejectedValueOnce(WRONG_CODE)
       .mockResolvedValueOnce({
@@ -231,6 +236,79 @@ describe("sign-up — verifying the email (R15)", () => {
     expect(
       screen.getByText("You have successfully verified your account."),
     ).toBeOnTheScreen();
+  });
+
+  it("R15: the code step and 'Verified' are one modal that stays up in between — iOS cannot present a second one while the first closes", async () => {
+    mockClerk.signUp.attemptEmailAddressVerification.mockResolvedValue({
+      status: "complete",
+      createdSessionId: "sess_1",
+    });
+    await signUpAs();
+    const [modal] = screen.UNSAFE_getAllByType(Modal);
+    expect(modal.props.visible).toBe(true);
+
+    await enterCode("424242");
+
+    expect(screen.UNSAFE_getAllByType(Modal)).toEqual([modal]);
+    expect(modal.props.visible).toBe(true);
+    expect(screen.getByTestId("verification-success")).toBeOnTheScreen();
+    expect(screen.queryByTestId("verification-modal")).toBeNull();
+  });
+
+  it("R15 EG8: a correct code whose session activation fails once is activated on a second try: Verified", async () => {
+    // On iOS and Android, @clerk/clerk-js 6's setActive first touches the
+    // session on Clerk's server, and a touch that fails (a 5xx, a 429, a
+    // dropped connection) now rejects it: 2.20 ignored that failure.
+    mockClerk.signUp.attemptEmailAddressVerification.mockResolvedValue({
+      status: "complete",
+      createdSessionId: "sess_1",
+    });
+    mockClerk.setActive.mockRejectedValueOnce(
+      new Error("Oops, an unexpected error occurred."),
+    );
+    await signUpAs();
+
+    await enterCode("424242");
+
+    expect(mockClerk.setActive.mock.calls).toEqual([
+      [{ session: "sess_1" }],
+      [{ session: "sess_1" }],
+    ]);
+    expect(screen.getByText("Verified")).toBeOnTheScreen();
+    expect(Alert.alert).not.toHaveBeenCalled();
+  });
+
+  it("R15 EG8: a correct code whose session can't be activated is not asked for again: the modal says the account is ready, and Verify Email retries only the activation", async () => {
+    // Clerk now holds the new account's session for this phone: the spent
+    // code would be refused, and so would a second sign-in.
+    mockClerk.signUp.attemptEmailAddressVerification.mockResolvedValue({
+      status: "complete",
+      createdSessionId: "sess_1",
+    });
+    mockClerk.setActive
+      .mockRejectedValueOnce(new Error("Oops, an unexpected error occurred."))
+      .mockRejectedValueOnce(new Error("Oops, an unexpected error occurred."));
+    await signUpAs();
+
+    await enterCode("424242");
+
+    expect(mockClerk.setActive).toHaveBeenCalledTimes(2);
+    expect(screen.getByTestId("verification-error")).toHaveTextContent(
+      "Your account is ready, but we couldn't sign you in. Check your connection and tap Verify Email again.",
+    );
+    expect(screen.queryByText("Verified")).toBeNull();
+    expect(Alert.alert).not.toHaveBeenCalled();
+
+    await act(async () => {
+      fireEvent.press(screen.getByTestId("verification-submit"));
+    });
+
+    expect(
+      mockClerk.signUp.attemptEmailAddressVerification,
+    ).toHaveBeenCalledTimes(1);
+    expect(mockClerk.setActive).toHaveBeenCalledTimes(3);
+    expect(mockClerk.setActive).toHaveBeenLastCalledWith({ session: "sess_1" });
+    expect(screen.getByText("Verified")).toBeOnTheScreen();
   });
 
   it("once verified, Browse Home replaces the stack with Home", async () => {

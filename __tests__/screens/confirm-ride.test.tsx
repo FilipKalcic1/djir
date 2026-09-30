@@ -33,7 +33,7 @@ import { resetClerk } from "../helpers/mocks/clerk";
 import { refocus, resetRouter, router } from "../helpers/mocks/expo-router";
 
 jest.mock("expo-router", () => require("../helpers/mocks/expo-router"));
-jest.mock("@clerk/clerk-expo", () => require("../helpers/mocks/clerk"));
+jest.mock("@clerk/expo", () => require("../helpers/mocks/clerk"));
 jest.mock("@/services/quotes", () => ({
   ...jest.requireActual("@/services/quotes"),
   fetchQuote: jest.fn(),
@@ -288,8 +288,10 @@ describe("confirm-ride — K6: the server refused the pickup time", () => {
     );
     await settle();
 
-    expect(router.navigate).toHaveBeenCalledTimes(1);
-    expect(router.navigate).toHaveBeenCalledWith("/(root)/find-ride");
+    // dismissTo pops back to Find ride; navigate would push a second one.
+    expect(router.dismissTo).toHaveBeenCalledTimes(1);
+    expect(router.dismissTo).toHaveBeenCalledWith("/(root)/find-ride");
+    expect(router.navigate).not.toHaveBeenCalled();
     expect(useBookingStore.getState()).toMatchObject({
       scheduledAt: null,
       slotNotice: SLOT_EXPIRED_NOTICE,
@@ -303,6 +305,7 @@ describe("confirm-ride — K6: the server refused the pickup time", () => {
   it("K6: without a slot notice the list stays put", () => {
     arrange({ quote: quote(), quoteStatus: "ready" });
 
+    expect(router.dismissTo).not.toHaveBeenCalled();
     expect(router.navigate).not.toHaveBeenCalled();
   });
 });

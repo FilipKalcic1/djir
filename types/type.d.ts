@@ -68,12 +68,7 @@ declare interface Ride {
 declare interface ButtonProps extends TouchableOpacityProps {
   title: string;
   bgVariant?:
-    | "primary"
-    | "secondary"
-    | "danger"
-    | "outline"
-    | "success"
-    | "light";
+    "primary" | "secondary" | "danger" | "outline" | "success" | "light";
   textVariant?: "primary" | "default" | "secondary" | "danger" | "success";
   IconLeft?: React.ComponentType<any>;
   IconRight?: React.ComponentType<any>;

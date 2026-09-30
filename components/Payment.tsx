@@ -1,4 +1,4 @@
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth } from "@clerk/expo";
 import { StripeProvider, useStripe } from "@stripe/stripe-react-native";
 import * as Linking from "expo-linking";
 import { router } from "expo-router";
@@ -7,6 +7,7 @@ import { Alert, Platform, Text, View } from "react-native";
 
 import CustomButton from "@/components/CustomButton";
 import { LatLng } from "@/lib/geo";
+import { ENV_FILE, isStripePublishableKey } from "@/lib/setup";
 import { formatEur } from "@/lib/utils";
 import { apiErrorCode } from "@/services/api";
 import { bookRide, confirmRide } from "@/services/booking";
@@ -20,6 +21,21 @@ import { Ride, TripQuote } from "@/types/type";
  * accepts 10 minutes, so at least 5 are left for entering a card.
  */
 export const QUOTE_REFRESH_AFTER_MS = 5 * 60_000;
+
+/**
+ * Where the Payment Sheet sends the rider back after a 3-D Secure page (EG6):
+ * the running app's own link, so it works in Expo Go
+ * (`exp://<dev server>/--/stripe-redirect`) as in a build
+ * (`djir://stripe-redirect`); app/stripe-redirect.tsx is its route.
+ */
+export const stripeReturnUrl = () => Linking.createURL("stripe-redirect");
+
+/** The pay button's label: "Confirm Ride" for now, "Schedule Ride" for a later pickup (P1). */
+const buttonLabelFor = (quote: TripQuote) =>
+  quote.scheduledAt === null ? "Confirm Ride" : "Schedule Ride";
+
+/** EG5: what Payment says when the app has no Stripe publishable key. */
+export const PAYMENTS_NOT_SET_UP = `Payments aren't set up in this build: add EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY (pk_test_…) to ${ENV_FILE} and restart npx expo start.`;
 
 export interface PaymentProps {
   driverId: number;
@@ -72,10 +88,9 @@ const PaymentButton = ({
   const [priceNotice, setPriceNotice] = useState<string | null>(null);
   const [requoteError, setRequoteError] = useState<string | null>(null);
   const awaitingFresh = useRef<number | null>(null); // the fare shown before refreshing
-  const buttonLabel =
-    quote.scheduledAt === null ? "Confirm Ride" : "Schedule Ride";
+  const buttonLabel = buttonLabelFor(quote);
 
-  // 3-D Secure may return to the app via djir://stripe-redirect.
+  // 3-D Secure may return to the app via its stripe-redirect link (EG6).
   useEffect(() => {
     const subscription = Linking.addEventListener("url", ({ url }) => {
       if (url.includes("stripe-redirect")) handleURLCallback(url);
@@ -131,7 +146,8 @@ const PaymentButton = ({
     return () => {
       active = false;
     };
-    // Runs once per unknown outcome; getToken and onBooked are stable.
+    // Runs once per unknown outcome. getToken is a new function on every
+    // render (@clerk/expo), but each one reads the current session.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [unknown]);
 
@@ -180,7 +196,7 @@ const PaymentButton = ({
 
     const { error: initError } = await initPaymentSheet({
       merchantDisplayName: "Djir",
-      returnURL: "djir://stripe-redirect",
+      returnURL: stripeReturnUrl(),
       intentConfiguration: {
         mode: { amount: quote.fareCents, currencyCode: "eur" },
         paymentMethodTypes: ["card"],
@@ -302,15 +318,38 @@ const PaymentButton = ({
   );
 };
 
-/** The Payment Sheet needs its provider; keeping it here lets Payment.web.tsx stub it. */
-const Payment = (props: PaymentProps) => (
-  <StripeProvider
-    publishableKey={process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY!}
-    merchantIdentifier="merchant.com.djir"
-    urlScheme="djir"
-  >
-    <PaymentButton {...props} />
-  </StripeProvider>
-);
+/**
+ * The Payment Sheet needs its provider; keeping it here lets Payment.web.tsx
+ * stub it. Without a Stripe publishable key (or with a secret key pasted in
+ * its place) there is no sheet to open: the button stays off and says which
+ * key is missing, instead of failing at the first tap (EG5).
+ */
+const Payment = (props: PaymentProps) => {
+  const publishableKey = process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY;
+  if (!publishableKey || !isStripePublishableKey(publishableKey)) {
+    return (
+      <View testID="payment-not-set-up" className="my-10">
+        <Text className="text-base font-JakartaSemiBold text-danger-700 text-center">
+          {PAYMENTS_NOT_SET_UP}
+        </Text>
+        <CustomButton
+          testID="payment-confirm"
+          title={buttonLabelFor(props.quote)}
+          className="mt-4"
+          disabled
+        />
+      </View>
+    );
+  }
+  return (
+    <StripeProvider
+      publishableKey={publishableKey}
+      merchantIdentifier="merchant.com.djir"
+      urlScheme="djir"
+    >
+      <PaymentButton {...props} />
+    </StripeProvider>
+  );
+};
 
 export default Payment;

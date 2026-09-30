@@ -2,11 +2,14 @@
  * app.config.ts layered over app.json (plan WP6 · Config). The plan proves
  * R33, R34 and R59 with `npx expo config`; here they are tests, so a
  * regression fails `npm test` instead of waiting for someone to run a command.
+ * NODE_ENV is set per test the way Expo CLI sets it: "development" for
+ * `expo start`, "production" for `expo export`, and nothing at all when a
+ * native build embeds the config (expo-constants' getAppConfig script).
  */
 import fs from "fs";
 import path from "path";
 
-import appConfig from "../../app.config";
+import appConfig, { DEV_SERVER_ORIGIN } from "../../app.config";
 import { REPO_ROOT } from "../helpers/repo";
 
 import type { ConfigContext, ExpoConfig } from "expo/config";
@@ -16,6 +19,17 @@ const ENV_KEYS = [
   "EXPO_PUBLIC_API_ORIGIN",
   "GOOGLE_MAPS_ANDROID_API_KEY",
   "DJIR_GALLERY",
+  "NODE_ENV",
+];
+/** SDK 57 configures the splash screen through its config plugin. */
+const SPLASH_SCREEN = [
+  "expo-splash-screen",
+  {
+    image: "./assets/images/splash.png",
+    resizeMode: "contain",
+    backgroundColor: "#2F80ED",
+    imageWidth: 200,
+  },
 ];
 
 /** A fresh copy of app.json's `expo` object, as Expo hands it to app.config.ts. */
@@ -66,6 +80,7 @@ describe("API origin (expo-router plugin)", () => {
   ])(
     "R33: sets no origin (false) when EXPO_PUBLIC_API_ORIGIN is %s, so no domain is hard-wired",
     (_, value) => {
+      process.env.NODE_ENV = "production"; // expo export
       if (value !== undefined) process.env.EXPO_PUBLIC_API_ORIGIN = value;
 
       const config = resolveConfig();
@@ -75,6 +90,50 @@ describe("API origin (expo-router plugin)", () => {
       ]);
     },
   );
+
+  it.each([
+    ["unset", undefined],
+    ["empty", ""],
+  ])(
+    "R33 EG4: under npx expo start (NODE_ENV development), an %s EXPO_PUBLIC_API_ORIGIN becomes the dev-server stand-in, so Expo Go's relative /(api) calls are not cut off",
+    (_, value) => {
+      process.env.NODE_ENV = "development";
+      if (value !== undefined) process.env.EXPO_PUBLIC_API_ORIGIN = value;
+
+      const config = resolveConfig();
+
+      expect(DEV_SERVER_ORIGIN).toBe("http://localhost:8081/");
+      expect(expoRouterEntries(config)).toEqual([
+        ["expo-router", { origin: "http://localhost:8081/" }],
+      ]);
+    },
+  );
+
+  it.each([
+    ["production (expo export)", "production"],
+    ["test", "test"],
+    ["unset (a native build's embedded config)", undefined],
+  ] as const)(
+    "R33 EG4: only development gets the stand-in — with NODE_ENV %s an empty origin stays false, so a release build fails closed",
+    (_, nodeEnv) => {
+      if (nodeEnv !== undefined) process.env.NODE_ENV = nodeEnv;
+
+      const config = resolveConfig();
+
+      expect(expoRouterEntries(config)).toEqual([
+        ["expo-router", { origin: false }],
+      ]);
+    },
+  );
+
+  it("R33 EG4: a set EXPO_PUBLIC_API_ORIGIN wins in development too", () => {
+    process.env.NODE_ENV = "development";
+    process.env.EXPO_PUBLIC_API_ORIGIN = "https://staging.djir.example/";
+
+    expect(expoRouterEntries(resolveConfig())).toEqual([
+      ["expo-router", { origin: "https://staging.djir.example/" }],
+    ]);
+  });
 
   it("swaps the router root for docs/gallery/app only when DJIR_GALLERY=1 (npm run docs:shots)", () => {
     process.env.EXPO_PUBLIC_API_ORIGIN = "https://staging.djir.example/";
@@ -107,6 +166,7 @@ describe("API origin (expo-router plugin)", () => {
     const config = resolveConfig(base);
 
     expect(config.plugins).toEqual([
+      SPLASH_SCREEN,
       ["expo-font", { fonts: [] }],
       "expo-secure-store",
       ["expo-router", { origin: "https://staging.djir.example/" }],
@@ -185,11 +245,24 @@ describe("app identity and appearance", () => {
       version: base.version,
       orientation: base.orientation,
       icon: base.icon,
-      splash: base.splash,
       ios: base.ios,
       web: base.web,
       experiments: base.experiments,
     });
+  });
+
+  it("keeps the splash screen as app.json's expo-splash-screen plugin, which replaced the top-level splash key in SDK 57", () => {
+    const base = appJson();
+
+    const config = resolveConfig(base);
+
+    expect(base).not.toHaveProperty("splash");
+    expect(config).not.toHaveProperty("splash");
+    expect(
+      (config.plugins ?? []).filter(
+        (plugin) => pluginName(plugin) === "expo-splash-screen",
+      ),
+    ).toEqual([SPLASH_SCREEN]);
   });
 
   it("names the app Djir / djir when app.json omits name and slug", () => {

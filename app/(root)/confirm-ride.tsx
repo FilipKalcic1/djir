@@ -77,7 +77,8 @@ const ConfirmRide = () => {
   // opens with the notice (Retry here would only ask for the same slot again).
   useFocusEffect(
     useCallback(() => {
-      if (slotNotice !== null) router.navigate("/(root)/find-ride");
+      // dismissTo pops back to it (navigate would push a second Find ride).
+      if (slotNotice !== null) router.dismissTo("/(root)/find-ride");
     }, [slotNotice]),
   );
 
